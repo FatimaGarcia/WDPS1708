@@ -10,13 +10,16 @@ import os
 from subprocess import call, Popen
 import numpy
 import re
+import requests
+import json
+import math
 
 from bs4 import BeautifulSoup
 from bs4.element import Comment
 
 import nltk
 from nltk.stem import WordNetLemmatizer
-from nltk.tag.stanford import CoreNLPNERTagger #NER Option 1
+#from nltk.tag.stanford import CoreNLPNERTagger #NER Option 1
 from nltk.tag import StanfordNERTagger #NER Option 2
 from nltk.tree import Tree
 
@@ -27,8 +30,7 @@ from nltk.tree import Tree
 #nltk.download('wordnet')
 #nltk.download()  #All packages
 
-#It should run with master yarn instead of local - CHECK
-sc = SparkContext("yarn", "WDPS1708")
+sc = SparkContext.getOrCreate()
 
 #Check input parameters
 if len(sys.argv) < 3 or len(sys.argv) >3:
@@ -91,15 +93,15 @@ rdd_pairs = rdd.flatMap(processWarcfile) #RDD with tuples (key, text)
 #1. Tokenization
 #2. Lemmatization - Not sure if needed
 #2. Tag - POS - Not sure if needed
-#3. NER 
+#3. NER - StanfordNER/NLTK
 
 def NLP_NER(record): 
     #sent_text = nltk.sent_tokenize(record)
     tokenized_text = nltk.word_tokenize(record)
     #wordnet_lemmatizer = WordNetLemmatizer()
     #lemmatize_text = [wordnet_lemmatizer.lemmatize(x) for x in tokenized_text]
-    #tag_text = nltk.pos_tag(tokenized_text)
-
+    tag_text = nltk.pos_tag(tokenized_text)
+   
     #Option 1 / Option 2
     ner_text = nlp.tag(tokenized_text) #Option 1 - Word tokenization
     #ner_text = [nlp.tag(s.split()) for s in sent_text] #Option 2 - Sentece tokenization
@@ -156,3 +158,22 @@ def get_entities_NLTK(record):
 rdd_ner_entities = rdd_ner.flatMapValues(get_entities_StanfordNER) #RDD tuples (key, entities)
 
 #print(rdd_ner_entities.collect())
+
+def get_label(record):
+
+	ELASTICSEARCH_URL = 'http://10.149.0.127:9200/freebase/label/_search'
+
+	for i in record:
+		query = i[0]
+		response = requests.get(ELASTICSEARCH_URL, params={'q': query, 'size':100})
+		ids = set()
+		labels = {}
+		scores = {}
+
+		if response:
+		    response = response.json()
+	yield response
+
+rdd_labels = rdd_ner_entities.flatMapValues(get_label)
+
+#print(rdd_labels.collect())
