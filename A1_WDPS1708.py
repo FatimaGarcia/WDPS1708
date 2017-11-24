@@ -28,7 +28,7 @@ from nltk.tree import Tree
 #nltk.download()  #All packages
 
 #It should run with master yarn instead of local - CHECK
-sc = SparkContext("local[*]", "WDPS1708")
+sc = SparkContext("yarn", "WDPS1708")
 
 #Check input parameters
 if len(sys.argv) < 3 or len(sys.argv) >3:
@@ -155,4 +155,4 @@ def get_entities_NLTK(record):
 
 rdd_ner_entities = rdd_ner.flatMapValues(get_entities_StanfordNER) #RDD tuples (key, entities)
 
-print(rdd_ner_entities.collect())
+#print(rdd_ner_entities.collect())
