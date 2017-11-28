@@ -131,7 +131,7 @@ def get_entities_StanfordNER(record):
     for i in record:
         if i[1] !='O':
             entities.append(i[0])
-    yield  yield entities
+    yield entities
 
 #Option 3 - Function to get entities from ne_chunk result - https://stackoverflow.com/questions/31836058/nltk-named-entity-recognition-to-a-python-list
 def get_entities_NLTK(record):
