@@ -8,7 +8,6 @@ import sys
 import collections
 import os
 from subprocess import call, Popen
-import numpy
 import re
 import requests
 import json
@@ -19,9 +18,7 @@ from bs4.element import Comment
 
 import nltk
 from nltk.stem import WordNetLemmatizer
-#from nltk.tag.stanford import CoreNLPNERTagger #NER Option 1
-from nltk.tag import StanfordNERTagger #NER Option 2
-from nltk.tree import Tree
+from nltk.tag import StanfordNERTagger #NER 
 
 #nltk.download('words')
 #nltk.download('maxent_ne_chunker')
@@ -91,72 +88,43 @@ rdd_pairs = rdd.flatMap(processWarcfile) #RDD with tuples (key, text)
 
 #NLP - NER  
 #1. Tokenization
-#2. Lemmatization - Not sure if needed
-#2. Tag - POS - Not sure if needed
-#3. NER - StanfordNER/NLTK
+#2. NER - StanfordNER
 
 def NLP_NER(record): 
     #sent_text = nltk.sent_tokenize(record)
     tokenized_text = nltk.word_tokenize(record)
-    #wordnet_lemmatizer = WordNetLemmatizer()
-    #lemmatize_text = [wordnet_lemmatizer.lemmatize(x) for x in tokenized_text]
-    tag_text = nltk.pos_tag(tokenized_text)
+    #tag_text = nltk.pos_tag(tokenized_text)
    
-    #Option 1 / Option 2
     ner_text = nlp.tag(tokenized_text) #Option 1 - Word tokenization
     #ner_text = [nlp.tag(s.split()) for s in sent_text] #Option 2 - Sentece tokenization
 
-    #Option 3 - NLTK Chunks 
-    #ner_text = nltk.ne_chunk(tag_text)
-
     yield ner_text
 
-#Option 1 - CoreNLPNERTagger -Needed to run an external server and files needed
-#call(["java", "-mx4g", "-cp", "../stanford-corenlp/*", "edu.stanford.nlp.pipeline.StanfordCoreNLPServer", "-port", "9000", "&"], stdout=None)
-#nlp = CoreNLPNERTagger(url='http://localhost:9000')
-
-#Option 2 - StanfordNERTagger - Files needed
+#StanfordNERTagger - Files needed
 classifier = 'stanford-ner/classifiers/english.all.3class.distsim.crf.ser.gz' #Path may change
 jar = 'stanford-ner/stanford-ner.jar'   #Path may change
 nlp = StanfordNERTagger(classifier,jar)
 
+rdd_for_disambiguation = rdd_pairs #Keep RDD with plain text to do entity disambiguation 
 rdd_ner = rdd_pairs.flatMapValues(NLP_NER) #RDD tuples (key, tuple(word, label))
 
 #print(rdd_ner.collect())
 
 #Extract Name Entities from result 
-#Option 1, 2 - Function to get recognized entities from Stanford NER
+#Function to get recognized entities from Stanford NER
 def get_entities_StanfordNER(record):
     entities = []
     for i in record:
-        if i[1] !='O':
+        if i[1] !='O' and i[0] not in entities:
             entities.append(i[0])
     yield entities
-
-#Option 3 - Function to get entities from ne_chunk result - https://stackoverflow.com/questions/31836058/nltk-named-entity-recognition-to-a-python-list
-def get_entities_NLTK(record):
-    prev = None
-    continuous_chunk = []
-    current_chunk = []
-    for i in record:
-        if type(i) == Tree:
-            current_chunk.append(" ".join([token for token, pos in i.leaves()]))
-        elif current_chunk:
-            named_entity = " ".join(current_chunk)
-            if named_entity not in continuous_chunk:
-                continuous_chunk.append(named_entity)
-                current_chunk = []
-            else:
-                continue
-    yield continuous_chunk
-
-
-#rdd_ner_entities = rdd_ner.flatMapValues(get_entities_NLTK) #RDD tuples (key, entities)
 
 rdd_ner_entities = rdd_ner.flatMapValues(get_entities_StanfordNER) #RDD tuples (key, entities)
 
 #print(rdd_ner_entities.collect())
 
+#Link entities to a knowledge base - MotherKB
+#Process result
 def get_label(record):
 
 	ELASTICSEARCH_URL = 'http://10.149.0.127:9200/freebase/label/_search'
