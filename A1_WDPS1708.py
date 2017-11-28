@@ -128,12 +128,10 @@ rdd_ner = rdd_pairs.flatMapValues(NLP_NER) #RDD tuples (key, tuple(word, label))
 #Option 1, 2 - Function to get recognized entities from Stanford NER
 def get_entities_StanfordNER(record):
     entities = []
-    entity_type =[]
     for i in record:
         if i[1] !='O':
             entities.append(i[0])
-            entity_type.append(i[1])
-    yield zip(entities, entity_type)
+    yield  yield entities
 
 #Option 3 - Function to get entities from ne_chunk result - https://stackoverflow.com/questions/31836058/nltk-named-entity-recognition-to-a-python-list
 def get_entities_NLTK(record):
@@ -164,16 +162,22 @@ def get_label(record):
 	ELASTICSEARCH_URL = 'http://10.149.0.127:9200/freebase/label/_search'
 
 	for i in record:
-		query = i[0]
+		query = i
 		response = requests.get(ELASTICSEARCH_URL, params={'q': query, 'size':100})
-		ids = set()
-		labels = {}
-		scores = {}
-
+		ids = []
+		labels = []
+		scores = []
 		if response:
 		    response = response.json()
-	yield response
+		    for hit in response.get('hits', {}).get('hits', []):
+        		freebase_id = hit.get('_source', {}).get('resource')
+        		ids.append(freebase_id)
+        		label = hit.get('_source', {}).get('label')
+        		labels.append(label)
+        		score = hit.get('_score', 0)
+        		scores.append(score)
+	yield zip(ids, labels, score)
 
 rdd_labels = rdd_ner_entities.flatMapValues(get_label)
 
-#print(rdd_labels.collect())
+print(rdd_labels.collect())
