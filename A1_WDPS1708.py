@@ -132,18 +132,24 @@ def get_label(record):
 	for i in record:
 		query = i
 		response = requests.get(ELASTICSEARCH_URL, params={'q': query, 'size':100})
-		triples = []
+		ids = {}
+		triples = {}
 		if response:
 		    response = response.json()
 		    for hit in response.get('hits', {}).get('hits', []):
         		freebase_id = hit.get('_source', {}).get('resource')
         		label = hit.get('_source', {}).get('label')
-        		score = hit.get('_score', 0)
-        		triple = (freebase_id, label, score)
-        		triples.append(triple)
-        info = (i, triples)
+	       		score = hit.get('_score', 0)
+	       		if freebase_id not in ids:
+	       			ids.append(freebase_id)
+	        		triples.add(freebase_id, {'label': label, 'score': score})
+        		else:
+        			score_1 = max(triples.get(freebase_id, 'score'), score)
+        			triples.add(freebase_id, {'label': label, 'score': score})
+        		info = (i, triples)
 	yield info
 
 rdd_labels = rdd_ner_entities.flatMapValues(get_label)
 
 print(rdd_labels.collect())
+
