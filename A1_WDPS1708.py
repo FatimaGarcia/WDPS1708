@@ -134,6 +134,7 @@ def get_label(record):
 		response = requests.get(ELASTICSEARCH_URL, params={'q': query, 'size':100})
 		ids = set()
 		result = {}
+		tuples = []
 		if response:
 		    response = response.json()
 		    for hit in response.get('hits', {}).get('hits', []):
@@ -147,7 +148,8 @@ def get_label(record):
 		        else:
 		        	score_1 = max(result.get(freebase_id, 'score'), score)
 		        	result[freebase_id] = ({'label':label, score_1})
-		yield (i, result)
+		tuples.append([i, result])
+	yield tuples
 
 rdd_labels = rdd_ner_entities.flatMapValues(get_label)
 
