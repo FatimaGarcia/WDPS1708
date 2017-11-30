@@ -79,42 +79,18 @@ def processWarcfile(record):
         #Format the text
         value = " ".join(value) 
         value = re.sub(r'[^\x00-\x7F]+','', value)
-        value = re.sub(r'[(?<=\{)(.*?)(?=\})]', ' ', value)
+        value = re.sub(r'[(?<=\{)(:*?)(?=\})]', ' ', value)
         value = ' '.join(value.split())
         yield (key, value)
 
 rdd_pairs = rdd.flatMap(processWarcfile) #RDD with tuples (key, text)
 
-#print(rdd_pairs.collect())
+print(rdd_pairs.collect())
 
 
 #NLP - NER  
 #1. Tokenization
 #2. NER - StanfordNER
-#Extract Name Entities from result - Function to get recognized entities from Stanford NER
-def get_entities_StanfordNER(record):
-    entities = []
-    for i in record:
-        if i[1] !='O' and i[0] not in entities:
-            entities.append(i[0])
-    yield entities
-
-#Function to get entities from ne_chunk result - https://stackoverflow.com/questions/31836058/nltk-named-entity-recognition-to-a-python-list
-def get_entities_NLTK(record):
-    continuous_chunk = []
-    current_chunk = []
-    for i in record:
-        if type(i) == Tree:
-            current_chunk.append(" ".join([token for token, pos in i.leaves()]))
-        elif current_chunk:
-        	if len(current_chunk) == 1:
-        		named_entity = " ".join(current_chunk)
-        		if named_entity not in continuous_chunk:
-        			continuous_chunk.append(named_entity)
-        			current_chunk = []
-        		else:
-        			continue
-    yield continuous_chunk
 
 def NLP_NER(record): 
     #sent_text = nltk.sent_tokenize(record)
@@ -122,16 +98,10 @@ def NLP_NER(record):
     tag_text = nltk.pos_tag(tokenized_text)
     
     #StanfordNER
-    ner_text_1 = nlp.tag(tokenized_text) #Option 1 - Word tokenization
+    ner_text_NER = nlp.tag(tokenized_text) #Option 1 - Word tokenization
     #ner_text = [nlp.tag(s.split()) for s in sent_text] #Option 2 - Sentece tokenization
-    ner_text_1 = list(get_entities_StanfordNER(ner_text_1))
-
-    #NLTK Chunks 
-    #ner_text_2 = nltk.ne_chunk(tag_text)
-    #ner_text_2 = get_entities_NLTK(ner_text_2)
     
-    #Try to mix more results to get more entities - Right now only Stanford NER
-    yield ner_text_1
+    yield ner_text_NER
 
 #StanfordNERTagger - Files needed
 classifier = 'stanford-ner/classifiers/english.all.3class.distsim.crf.ser.gz' #Path may change
@@ -142,6 +112,18 @@ rdd_ner = rdd_pairs.flatMapValues(NLP_NER) #RDD tuples (key, tuple(word, label))
 
 #print(rdd_ner.collect())
 
+#Extract Name Entities from result - Function to get recognized entities from Stanford NER
+def get_entities_StanfordNER(record):
+    entities = []
+    for i in record:
+        if i[1] !='O' and i[0] not in entities:
+            entities.append(i[0])
+    yield entities
+
+rdd_ner_entities = rdd_ner.flatMapValues(get_entities_StanfordNER) #RDD tuples (key, entities)
+
+print(rdd_ner_entities.collect())
+
 #Link entities to KB
 ELASTICSEARCH_URL = 'http://10.149.0.127:9200/freebase/label/_search'
 
@@ -149,12 +131,9 @@ ELASTICSEARCH_URL = 'http://10.149.0.127:9200/freebase/label/_search'
 def get_label(record):
 	for i in record:
 		query = i
-		print('Searching for "%s"...' % query)
 		response = requests.get(ELASTICSEARCH_URL, params={'q': query, 'size':100})
 		ids = set()
-		labels = {}
-		scores = {}
-
+		result = {}
 		if response:
 		    response = response.json()
 		    for hit in response.get('hits', {}).get('hits', []):
@@ -162,11 +141,15 @@ def get_label(record):
 		        label = hit.get('_source', {}).get('label')
 		        score = hit.get('_score', 0)
 
-		        ids.add( freebase_id )
-		        scores[freebase_id] = max(scores.get(freebase_id, 0), score)
-		        labels.setdefault(freebase_id, set()).add( label )
+		        ids.add(freebase_id)
+		        if result.get(freebase_id) == None:
+		        	result[freebase_id] = ({'label':label, 'score':score})
+		        else:
+		        	score_1 = max(result.get(freebase_id, 'score'), score)
+		        	result[freebase_id] = ({'label':label, 'score':score_1})
+		yield (i, result)
 
-rdd_labels = rdd_ner.flatMapValues(get_label)
+rdd_labels = rdd_ner_entities.flatMapValues(get_label)
 
 #print(rdd_labels.collect())
 
@@ -190,11 +173,3 @@ SELECT DISTINCT * WHERE {
     %s ?p ?o.
 }
 """
-
-#Function to get the number of facts of each ID
-def get_facts(record):
-	
-
-rdd_ids = rdd_labels.flatMapValues(get_facts)
-
-print(rdd_ids.collect())
