@@ -19,6 +19,7 @@ from bs4.element import Comment
 import nltk
 from nltk.stem import WordNetLemmatizer
 from nltk.tag import StanfordNERTagger #NER 
+from nltk.tree import Tree
 
 #nltk.download('words')
 #nltk.download('maxent_ne_chunker')
@@ -78,6 +79,7 @@ def processWarcfile(record):
         #Format the text
         value = " ".join(value) 
         value = re.sub(r'[^\x00-\x7F]+','', value)
+        value = re.sub(r'[(?<=\{)(.*?)(?=\})]', ' ', value)
         value = ' '.join(value.split())
         yield (key, value)
 
@@ -89,27 +91,6 @@ rdd_pairs = rdd.flatMap(processWarcfile) #RDD with tuples (key, text)
 #NLP - NER  
 #1. Tokenization
 #2. NER - StanfordNER
-
-def NLP_NER(record): 
-    #sent_text = nltk.sent_tokenize(record)
-    tokenized_text = nltk.word_tokenize(record)
-    #tag_text = nltk.pos_tag(tokenized_text)
-   
-    ner_text = nlp.tag(tokenized_text) #Option 1 - Word tokenization
-    #ner_text = [nlp.tag(s.split()) for s in sent_text] #Option 2 - Sentece tokenization
-
-    yield ner_text
-
-#StanfordNERTagger - Files needed
-classifier = 'stanford-ner/classifiers/english.all.3class.distsim.crf.ser.gz' #Path may change
-jar = 'stanford-ner/stanford-ner.jar'   #Path may change
-nlp = StanfordNERTagger(classifier,jar)
-
-rdd_for_disambiguation = rdd_pairs #Keep RDD with plain text to do entity disambiguation 
-rdd_ner = rdd_pairs.flatMapValues(NLP_NER) #RDD tuples (key, tuple(word, label))
-
-#print(rdd_ner.collect())
-
 #Extract Name Entities from result - Function to get recognized entities from Stanford NER
 def get_entities_StanfordNER(record):
     entities = []
@@ -118,14 +99,55 @@ def get_entities_StanfordNER(record):
             entities.append(i[0])
     yield entities
 
-rdd_ner_entities = rdd_ner.flatMapValues(get_entities_StanfordNER) #RDD tuples (key, entities)
+#Function to get entities from ne_chunk result - https://stackoverflow.com/questions/31836058/nltk-named-entity-recognition-to-a-python-list
+def get_entities_NLTK(record):
+    continuous_chunk = []
+    current_chunk = []
+    for i in record:
+        if type(i) == Tree:
+            current_chunk.append(" ".join([token for token, pos in i.leaves()]))
+        elif current_chunk:
+        	if len(current_chunk) == 1:
+        		named_entity = " ".join(current_chunk)
+        		if named_entity not in continuous_chunk:
+        			continuous_chunk.append(named_entity)
+        			current_chunk = []
+        		else:
+        			continue
+    yield continuous_chunk
 
-#print(rdd_ner_entities.collect())
+def NLP_NER(record): 
+    #sent_text = nltk.sent_tokenize(record)
+    tokenized_text = nltk.word_tokenize(record)
+    tag_text = nltk.pos_tag(tokenized_text)
+    
+    #StanfordNER
+    ner_text_1 = nlp.tag(tokenized_text) #Option 1 - Word tokenization
+    #ner_text = [nlp.tag(s.split()) for s in sent_text] #Option 2 - Sentece tokenization
+    ner_text_1 = list(get_entities_StanfordNER(ner_text_1))
 
-#
+    #NLTK Chunks 
+    ner_text_2 = nltk.ne_chunk(tag_text)
+    ner_text_2 = get_entities_NLTK(ner_text_2)
+    
+    #Try to mix more results to get more entities - Right now only Stanford NER
+    yield ner_text_1
+
+#StanfordNERTagger - Files needed
+classifier = 'stanford-ner/classifiers/english.all.3class.distsim.crf.ser.gz' #Path may change
+jar = 'stanford-ner/stanford-ner.jar'   #Path may change
+nlp = StanfordNERTagger(classifier,jar)
+
+rdd_ner = rdd_pairs.flatMapValues(NLP_NER) #RDD tuples (key, tuple(word, label))
+
+#print(rdd_ner.collect())
+
+#Link entities to KB
 ELASTICSEARCH_URL = 'http://10.149.0.127:9200/freebase/label/_search'
+
+#Get IDs, label and score from ELASTICSEARCH for each entity
 def get_label(record):
-	ids = []
+	ids = set()
 	triples = {}
 	for i in record:
 		query = i
@@ -136,20 +158,22 @@ def get_label(record):
         		freebase_id = hit.get('_source', {}).get('resource')
         		label = hit.get('_source', {}).get('label')
 	       		score = hit.get('_score', 0)
-	       		if freebase_id not in ids:
-	       			ids.append(freebase_id)
+       			ids.add(freebase_id)
+       			if triples.get[freebase_id] == None :
 	        		triples[freebase_id]= ({'label': label, 'score': score})
         		else:
         			score_1 = max(triples.get(freebase_id, 'score'), score)
-        			triples[freebase_id] = ({'label': label, 'score': score})
+        			triples[freebase_id] = ({'label': label, 'score': score_1})
         		info = (i, triples)
 	yield info
 
-rdd_labels = rdd_ner_entities.flatMapValues(get_label)
+rdd_labels = rdd_ner.flatMapValues(get_label)
 
 #print(rdd_labels.collect())
 
-TRIDENT_URL = 'http://10.141.0.11:8082/sparql'
+
+#Link IDs to motherKB
+TRIDENT_URL = 'http://10.141.0.124:9001/sparql'
 prefixes = """
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
@@ -168,14 +192,9 @@ SELECT DISTINCT * WHERE {
 }
 """
 
+#Function to get the number of facts of each ID
 def get_facts(record):
-	for i in record:
-		for key in i[1]:
-			response = requests.post(TRIDENT_URL, data={'print': False, 'query': po_template % key})
-			if response:
-				response = response.json()
-				n = int(response.get('stats', {}).get('nresults',0))
-				i[1]['facts'] = n
+	
 
 rdd_ids = rdd_labels.flatMapValues(get_facts)
 
