@@ -147,7 +147,7 @@ ELASTICSEARCH_URL = 'http://10.149.0.127:9200/freebase/label/_search'
 
 #Get IDs, label and score from ELASTICSEARCH for each entity
 def get_label(record):
-	ids = set()
+	ids = []
 	triples = {}
 	for i in record:
 		query = i
@@ -158,8 +158,7 @@ def get_label(record):
         		freebase_id = hit.get('_source', {}).get('resource')
         		label = hit.get('_source', {}).get('label')
 	       		score = hit.get('_score', 0)
-       			ids.add(freebase_id)
-       			if triples.get[freebase_id] == None :
+       			if freebase_id not in ids:
 	        		triples[freebase_id]= ({'label': label, 'score': score})
         		else:
         			score_1 = max(triples.get(freebase_id, 'score'), score)
