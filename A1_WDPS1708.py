@@ -146,7 +146,7 @@ def get_label(record):
 		        	result[freebase_id] = ({'label':label, 'score':score})
 		        else:
 		        	score_1 = max(result.get(freebase_id, 'score'), score)
-		        	result[freebase_id] = ({'label':label, 'score':score_1})
+		        	result[freebase_id] = ({'label':label, score_1})
 		yield (i, result)
 
 rdd_labels = rdd_ner_entities.flatMapValues(get_label)
