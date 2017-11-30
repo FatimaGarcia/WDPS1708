@@ -127,8 +127,8 @@ def NLP_NER(record):
     ner_text_1 = list(get_entities_StanfordNER(ner_text_1))
 
     #NLTK Chunks 
-    ner_text_2 = nltk.ne_chunk(tag_text)
-    ner_text_2 = get_entities_NLTK(ner_text_2)
+    #ner_text_2 = nltk.ne_chunk(tag_text)
+    #ner_text_2 = get_entities_NLTK(ner_text_2)
     
     #Try to mix more results to get more entities - Right now only Stanford NER
     yield ner_text_1
@@ -147,24 +147,24 @@ ELASTICSEARCH_URL = 'http://10.149.0.127:9200/freebase/label/_search'
 
 #Get IDs, label and score from ELASTICSEARCH for each entity
 def get_label(record):
-	ids = []
-	triples = {}
 	for i in record:
 		query = i
+		print('Searching for "%s"...' % query)
 		response = requests.get(ELASTICSEARCH_URL, params={'q': query, 'size':100})
+		ids = set()
+		labels = {}
+		scores = {}
+
 		if response:
 		    response = response.json()
 		    for hit in response.get('hits', {}).get('hits', []):
-        		freebase_id = hit.get('_source', {}).get('resource')
-        		label = hit.get('_source', {}).get('label')
-	       		score = hit.get('_score', 0)
-       			if freebase_id not in ids:
-	        		triples[freebase_id]= ({'label': label, 'score': score})
-        		else:
-        			score_1 = max(triples.get(freebase_id, 'score'), score)
-        			triples[freebase_id] = ({'label': label, 'score': score_1})
-        		info = (i, triples)
-	yield info
+		        freebase_id = hit.get('_source', {}).get('resource')
+		        label = hit.get('_source', {}).get('label')
+		        score = hit.get('_score', 0)
+
+		        ids.add( freebase_id )
+		        scores[freebase_id] = max(scores.get(freebase_id, 0), score)
+		        labels.setdefault(freebase_id, set()).add( label )
 
 rdd_labels = rdd_ner.flatMapValues(get_label)
 
