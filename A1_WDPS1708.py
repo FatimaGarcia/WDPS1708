@@ -122,19 +122,19 @@ def get_entities_StanfordNER(record):
 
 rdd_ner_entities = rdd_ner.flatMapValues(get_entities_StanfordNER) #RDD tuples (key, entities)
 
-print(rdd_ner_entities.collect())
+#print(rdd_ner_entities.collect())
 
 #Link entities to KB
 ELASTICSEARCH_URL = 'http://10.149.0.127:9200/freebase/label/_search'
 
 #Get IDs, label and score from ELASTICSEARCH for each entity
 def get_label(record):
+	tuples = []
 	for i in record:
 		query = i
 		response = requests.get(ELASTICSEARCH_URL, params={'q': query, 'size':100})
 		ids = set()
 		result = {}
-		tuples = []
 		if response:
 		    response = response.json()
 		    for hit in response.get('hits', {}).get('hits', []):
@@ -144,10 +144,10 @@ def get_label(record):
 
 		        ids.add(freebase_id)
 		        if result.get(freebase_id) == None:
-		        	result[freebase_id] = ({'label':label, 'score':score})
+		        	result[freebase_id] = ({'label':label, 'score':score, 'facts': 0})
 		        else:
-		        	score_1 = max(result.get(freebase_id, 'score'), score)
-		        	result[freebase_id] = ({'label':label, score_1})
+		        	score_1 = max(result[freebase_id]['score'], score)
+		        	result[freebase_id]['score'] = score_1
 		tuples.append([i, result])
 	yield tuples
 
@@ -175,3 +175,21 @@ SELECT DISTINCT * WHERE {
     %s ?p ?o.
 }
 """
+
+def get_facts(record):
+	tuples = []
+	for i in record:
+		entity = i[0]
+		for key in i[1]:
+			response = requests.post(TRIDENT_URL, data={'print': False, 'query': po_template % key})
+ 			if response:
+		        response = response.json()
+		        n = int(response.get('stats',{}).get('nresults',0))
+		        i[1][key]['facts'] = n
+		    tuples.append((entity, i[1]))
+	yield tuples
+
+
+rdd_ids = rdd_labels.flatMapValues(get_facts)
+
+print(rdd_ids.collect())
