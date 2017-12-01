@@ -140,7 +140,7 @@ def get_elasticsearch(record):
 		        score = hit.get('_score', 0)
 
 		        if result.get(freebase_id) == None: #Check duplicate id
-		        	result[freebase_id] = ({'label':label, 'score':score, 'facts': 0}) #If freebase_id is not in the dict, add all the extract info from JSON
+		        	result[freebase_id] = ({'label':label, 'score':score, 'facts': 0 , 'match':0}) #If freebase_id is not in the dict, add all the extract info from JSON
 		        else:
 		        	score_1 = max(result[freebase_id]['score'], score)
 		        	result[freebase_id]['score'] = score_1 #If freebase_id is in the dict, update the score but not create a new entry
@@ -171,7 +171,7 @@ SELECT DISTINCT * WHERE {
     %s ?p ?o.
 }
 """
-#Get number of facts and links from KB for each entity 
+#Get number of facts from KB for each entity. Calculate the 'match' from score and facts as stated in https://github.com/bennokr/wdps2017/query.py
 def get_motherKB(record):
 	tuples = []
 	for i in record:
@@ -182,6 +182,7 @@ def get_motherKB(record):
 		    	response = response.json()
 		    	n = int(response.get('stats',{}).get('nresults',0))
 		    	i[1][key]['facts'] = n
+		    	i[1][key]['match'] = math.log(n) * i[1][key]['score']
 		tuples.append((entity, i[1]))
 	yield tuples
 
@@ -190,15 +191,24 @@ rdd_ids = rdd_labels.flatMapValues(get_motherKB)
 
 #print(rdd_ids.collect())
 
-def get_best(i):
-    return math.log(j['facts']) * j['score']
-
+#Get 10 best matches from the complete set of results to perform entity disambiguation with the 10 best results
 def get_bestmatches(record):
+	tuples=[]
+	best_matches = {}
 	for i in record:
 		entity = i[0]
-		for j in sorted(i[1], key=get_best, reverse=True)[:10]:
-			print(i, ':', labels[i], '(facts: %s, score: %.2f)' % (facts[i], scores[i]) )
-    		sys.stdout.flush()
-
+		best_matches = sorted(i[1].items(), key=lambda x:(x[1]['match']), reverse=True)
+		tuples.append((entity, best_matches))
+	yield tuples
 
 rdd_ids_best = rdd_ids.flatMapValues(get_bestmatches)
+
+#print(rdd_ids_best.collect())
+
+def get_ouput(record):
+	with open("output.tsv", "w") as record_file:
+    record_file.write("WARC-Key    Entity    ID\n")
+    for x in record:
+        record_file.write(str(x)+"\n")
+        
+print('The output is the file output.tsv')
