@@ -153,7 +153,7 @@ rdd_labels = rdd_ner_entities.flatMapValues(get_elasticsearch) #RDD (key, [entit
 
 
 #Link IDs to motherKB
-TRIDENT_URL = 'http://10.141.0.124:9001/sparql' #May change
+TRIDENT_URL = 'http://10.141.0.125:9001/sparql' #May change
 prefixes = """
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
@@ -179,13 +179,26 @@ def get_motherKB(record):
 		for key in i[1]:
 			response = requests.post(TRIDENT_URL, data={'print': False, 'query': po_template % key})
  			if response:
-		        response = response.json()
-		        n = int(response.get('stats',{}).get('nresults',0))
-		        i[1][key]['facts'] = n
+		    	response = response.json()
+		    	n = int(response.get('stats',{}).get('nresults',0))
+		    	i[1][key]['facts'] = n
 		tuples.append((entity, i[1]))
 	yield tuples
 
 
 rdd_ids = rdd_labels.flatMapValues(get_motherKB)
 
-print(rdd_ids.collect())
+#print(rdd_ids.collect())
+
+def get_best(i):
+    return math.log(j['facts']) * j['score']
+
+def get_bestmatches(record):
+	for i in record:
+		entity = i[0]
+		for j in sorted(i[1], key=get_best, reverse=True)[:10]:
+			print(i, ':', labels[i], '(facts: %s, score: %.2f)' % (facts[i], scores[i]) )
+    		sys.stdout.flush()
+
+
+rdd_ids_best = rdd_ids.flatMapValues(get_bestmatches)
