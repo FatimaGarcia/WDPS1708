@@ -179,10 +179,10 @@ def get_motherKB(record):
 		for key in i[1]:
 			response = requests.post(TRIDENT_URL, data={'print': False, 'query': po_template % key})
  			if response:
-		    	response = response.json()
-		    	n = int(response.get('stats',{}).get('nresults',0))
-		    	i[1][key]['facts'] = n
-		    	i[1][key]['match'] = math.log(n) * i[1][key]['score']
+ 				response = response.json()
+ 				n = int(response.get('stats', {}).get('nresults',0))
+ 				i[1][key]['facts']= n
+ 				i[1][key]['match'] = math.log(n) * i[1][key]['score']			    	
 		tuples.append((entity, i[1]))
 	yield tuples
 
@@ -193,22 +193,25 @@ rdd_ids = rdd_labels.flatMapValues(get_motherKB)
 
 #Get 10 best matches from the complete set of results to perform entity disambiguation with the 10 best results
 def get_bestmatches(record):
-	tuples=[]
 	best_matches = {}
+	tuples = []
 	for i in record:
 		entity = i[0]
-		best_matches = sorted(i[1].items(), key=lambda x:(x[1]['match']), reverse=True)
-		tuples.append((entity, best_matches))
-	yield tuples
+		best_matches = sorted(i[1].items(), key=lambda x:(x[1]['match']), reverse=True)[:1]
+
+		#Simple version returning the result with highest match
+		for key in best_matches:
+			yield (entity, key)
 
 rdd_ids_best = rdd_ids.flatMapValues(get_bestmatches)
 
-#print(rdd_ids_best.collect())
+print(rdd_ids_best.collect())
 
 def get_ouput(record):
 	with open("output.tsv", "w") as record_file:
-    record_file.write("WARC-Key    Entity    ID\n")
-    for x in record:
-        record_file.write(str(x)+"\n")
-        
+    	record_file.write("WARC-Key\tEntity\tID\n")
+    	for x in record[1]:
+        	record_file.write(str(record[0])+'\t'+str(x[0])+'\t'+str(x[1])+"\n")
+
+get_ouput(rdd_ids_best.collect())
 print('The output is the file output.tsv')
