@@ -12,6 +12,7 @@ import re
 import requests
 import json
 import math
+import urllib
 
 from bs4 import BeautifulSoup
 from bs4.element import Comment
@@ -100,6 +101,7 @@ print(rdd_pairs.collect())
 def NLP_NER(record): 
     #sent_text = nltk.sent_tokenize(record)
     tokenized_text = nltk.word_tokenize(record)
+    tokenized_text = [x.encode('utf-8') for x in tokenized_text]
     tag_text = nltk.pos_tag(tokenized_text)
     
     #StanfordNER
@@ -121,9 +123,15 @@ rdd_ner = rdd_pairs.flatMapValues(NLP_NER) #RDD tuples (key, tuple(word, label))
 #Extract Name Entities from result - Function to get recognized entities from Stanford NER
 def get_entities_StanfordNER(record):
     entities = []
+    #last_tag = None
     for i in record:
-        if (i[1] !='O' and i[0] not in entities):
-            entities.append(i[0])
+		if (i[1] !='O' and i[0] not in entities):
+			#if i[1] == last_tag:
+			#	entities[len(entities)-1] = entities[len(entities)-1]+' '+i[0]
+			#else:
+			entities.append(i[0])
+		#last_tag = i[1]
+    
     yield entities
 
 rdd_ner_entities = rdd_ner.flatMapValues(get_entities_StanfordNER) #RDD tuples (key, entities)
@@ -148,7 +156,7 @@ def get_elasticsearch(record):
 		        score = hit.get('_score', 0)
 
 		        if result.get(freebase_id) == None: #Check duplicate id
-		        	result[freebase_id] = ({'label':label, 'score':score, 'facts': 0 , 'match':0}) #If freebase_id is not in the dict, add all the extract info from JSON
+		        	result[freebase_id] = ({'label':label, 'score':score, 'facts': 0 , 'match':0, 'text': ''}) #If freebase_id is not in the dict, add all the extract info from JSON
 		        else:
 		        	score_1 = max(result[freebase_id]['score'], score)
 		        	result[freebase_id]['score'] = score_1 #If freebase_id is in the dict, update the score but not create a new entry
@@ -201,19 +209,22 @@ rdd_ids = rdd_labels.flatMapValues(get_motherKB)
 def get_bestmatches(record):
 	best_matches = {}
 	tuples = []
+	links = []
 	for i in record:
 		entity = i[0]
-		best_matches = dict(sorted(i[1].items(), key=lambda x:(x[1]['match']), reverse=True)[:10])
+		best_matches = dict(sorted(i[1].items(), key=lambda x:(x[1]['match']), reverse=True)[:5])
 		for key in best_matches:
-			response = requests.post(TRIDENT_URL, data={'print': True, 'query': same_as_template % i})
+			response = requests.post(TRIDENT_URL, data={'print': True, 'query': same_as_template % key})
     		if response:
         		response = response.json()
         		for binding in response.get('results', {}).get('bindings', []):
-            		link = binding.get('same', {}).get('value', None)[0]
-					html = urllib.urlopen(link).read()
-					link_text = get_text(html)
+            		link = binding.get('same', {}).get('value', None)
+            		if link.startswith('http://dbpedia.org')
+						html = urllib.urlopen(link).read()
+						link_text = get_text(html)
+						best_matches[key]['text'] = link_text
 		tuples.append([entity, best_matches])
-	yield link_text
+	yield tuples
 
 rdd_ids_best = rdd_ids.flatMapValues(get_bestmatches)
 
