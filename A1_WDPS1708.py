@@ -82,7 +82,7 @@ def processWarcfile(record):
 
 rdd_pairs = rdd.flatMap(processWarcfile) #RDD with tuples (key, text)
 
-print(rdd_pairs.collect())
+#print(rdd_pairs.collect())
 
 
 #NLP - NER  
@@ -114,7 +114,7 @@ rdd_ner = rdd_pairs.flatMapValues(NLP_NER) #RDD tuples (key, tuple(word, label))
 def get_entities_StanfordNER(record):
     entities = []
     for i in record:
-        if i[1] !='O' and i[0] not in entities:
+        if (i[1] !='O' and i[0] not in entities) or (i.isupper() and not in entites):
             entities.append(i[0])
     yield entities
 
@@ -183,7 +183,7 @@ def get_motherKB(record):
  				n = int(response.get('stats', {}).get('nresults',0))
  				i[1][key]['facts']= n
  				i[1][key]['match'] = math.log(n) * i[1][key]['score']			    	
-		tuples.append((entity, i[1]))
+		tuples.append([entity, i[1]])
 	yield tuples
 
 
@@ -197,21 +197,22 @@ def get_bestmatches(record):
 	tuples = []
 	for i in record:
 		entity = i[0]
-		best_matches = sorted(i[1].items(), key=lambda x:(x[1]['match']), reverse=True)[:1]
-
-		#Simple version returning the result with highest match
-		for key in best_matches:
-			yield (entity, key)
+		best_matches = dict(sorted(i[1].items(), key=lambda x:(x[1]['match']), reverse=True)[:1])
+		tuples.append([entity, best_matches])
+	yield tuples
 
 rdd_ids_best = rdd_ids.flatMapValues(get_bestmatches)
 
-print(rdd_ids_best.collect())
+#print(rdd_ids_best.collect())
 
 def get_ouput(record):
-	with open("output.tsv", "w") as record_file:
-    	record_file.write("WARC-Key\tEntity\tID\n")
-    	for x in record[1]:
-        	record_file.write(str(record[0])+'\t'+str(x[0])+'\t'+str(x[1])+"\n")
-
+	with open("~/output.tsv","w") as record_file:
+		record_file.write("Warc key 		 	Entity 				ID\n")
+     	for i in record:
+     		for j in i[1]:
+     			for key in j[1]:
+     				key = key.replace(".*:|\\.(?!m)", "'\'")	
+     				record_file.write(i[0]+"\t\t\t"+j[0]+"\t\t\t"+key+"\n")
+       
 get_ouput(rdd_ids_best.collect())
-print('The output is the file output.tsv')
+print('The output is the file output.tsv in your home directory')
