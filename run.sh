@@ -10,4 +10,4 @@ if [ "$SPARK_HOME" = "" ]; then
 	exit 1
 fi
 
-PYSPARK_PYTHON=$(readlink -f $(which python)) $SPARK_HOME/bin/spark-submit --master yarn A1_WDPS1708.py $1 $2
+PYSPARK_PYTHON=$(readlink -f $(which python)) $SPARK_HOME/bin/spark-submit --master local[*] A1_WDPS1708.py $1 $2

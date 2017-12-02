@@ -25,6 +25,9 @@ from nltk.tree import Tree
 #nltk.download('punkt')
 #nltk.download('averaged_perceptron_tagger')
 
+#from sklearn.feature_extraction.text import TfidfVectorizer
+
+
 sc = SparkContext.getOrCreate()
 
 #Check input parameters
@@ -59,6 +62,18 @@ def tag_visible(element):
         return False
     return True
 
+def get_text(html):
+	soup = BeautifulSoup(html, "html.parser")  #Extract HTMLContent
+	plain_text = soup.findAll(text=True) #Get plain text
+	value = filter(tag_visible, plain_text) #Get only visible text
+	#Format the text
+	value = " ".join(value) 
+	value = re.sub(r'[^\x00-\x7F]+',' ', value) #Replace special unicode characters
+	value = re.sub(r'[(?<=\{)(:*?)(?=\})]', ' ', value) #Replace special characters
+	value = ' '.join(value.split())
+
+	return value
+
 #Function to extract the WARC key and plain text from HTML content of the WARC file
 def processWarcfile(record):
     _, payload = record
@@ -71,20 +86,12 @@ def processWarcfile(record):
     #Check if the WARC block contains HTML code
     if key and ('<html' in payload):
         html = payload.split('<html')[1]
-        soup = BeautifulSoup(html, "html.parser")  #Extract HTMLContent
-        plain_text = soup.findAll(text=True) #Get plain text
-        value = filter(tag_visible, plain_text) #Get only visible text
-        #Format the text
-        value = " ".join(value) 
-        value = re.sub(r'[^\x00-\x7F]+',' ', value) #Replace special unicode characters
-        value = re.sub(r'[(?<=\{)(:*?)(?=\})]', ' ', value) #Replace special characters
-        value = ' '.join(value.split())
+        value = get_text(html)
         yield (key, value)
 
 rdd_pairs = rdd.flatMap(processWarcfile) #RDD with tuples (key, text)
-
-#print(rdd_pairs.collect())
-
+rdd_disambiguation = rdd_pairs #Save plain text before transform it for disambiguation
+print(rdd_pairs.collect())
 
 #NLP - NER  
 #1. Tokenization
@@ -115,7 +122,7 @@ rdd_ner = rdd_pairs.flatMapValues(NLP_NER) #RDD tuples (key, tuple(word, label))
 def get_entities_StanfordNER(record):
     entities = []
     for i in record:
-        if (i[1] !='O' and i[0] not in entities) or (i[0].isupper() and i[0] not in entities):
+        if (i[1] !='O' and i[0] not in entities):
             entities.append(i[0])
     yield entities
 
@@ -152,7 +159,6 @@ rdd_labels = rdd_ner_entities.flatMapValues(get_elasticsearch) #RDD (key, [entit
 
 #print(rdd_labels.collect())
 
-
 #Link IDs to motherKB
 TRIDENT_URL = 'http://10.141.0.125:9001/sparql' #May change
 prefixes = """
@@ -187,7 +193,6 @@ def get_motherKB(record):
 		tuples.append([entity, i[1]])
 	yield tuples
 
-
 rdd_ids = rdd_labels.flatMapValues(get_motherKB)
 
 #print(rdd_ids.collect())
@@ -198,16 +203,24 @@ def get_bestmatches(record):
 	tuples = []
 	for i in record:
 		entity = i[0]
-		best_matches = dict(sorted(i[1].items(), key=lambda x:(x[1]['match']), reverse=True)[:1])
+		best_matches = dict(sorted(i[1].items(), key=lambda x:(x[1]['match']), reverse=True)[:10])
+		for key in best_matches:
+			response = requests.post(TRIDENT_URL, data={'print': True, 'query': same_as_template % i})
+    		if response:
+        		response = response.json()
+        		for binding in response.get('results', {}).get('bindings', []):
+            		link = binding.get('same', {}).get('value', None)[0]
+					html = urllib.urlopen(link).read()
+					link_text = get_text(html)
 		tuples.append([entity, best_matches])
-	yield tuples
+	yield link_text
 
 rdd_ids_best = rdd_ids.flatMapValues(get_bestmatches)
 
 #print(rdd_ids_best.collect())
 
 #Write the output to a file
-def get_ouput(record):
+def get_output(record):
 	with open("output.tsv","w") as record_file:
 		record_file.write("Warc key 		 	Entity 				ID\n")
 		for i in record:
@@ -217,5 +230,5 @@ def get_ouput(record):
 					record_file.write(i[0]+"\t\t\t"+j[0]+"\t\t\t"+key+"\n")
 
        
-get_ouput(rdd_ids_best.collect())
+get_output(rdd_ids_best.collect())
 print('The output is the file output.tsv')
