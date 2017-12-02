@@ -35,6 +35,7 @@ else:
 	in_file = sys.argv[2]
 
 
+
 #Read warc file and split in WARC/1.0
 rdd = sc.newAPIHadoopFile(in_file,
     "org.apache.hadoop.mapreduce.lib.input.TextInputFormat",
@@ -114,7 +115,7 @@ rdd_ner = rdd_pairs.flatMapValues(NLP_NER) #RDD tuples (key, tuple(word, label))
 def get_entities_StanfordNER(record):
     entities = []
     for i in record:
-        if (i[1] !='O' and i[0] not in entities) or (i.isupper() and not in entites):
+        if (i[1] !='O' and i[0] not in entities) or (i[0].isupper() and i[0] not in entities):
             entities.append(i[0])
     yield entities
 
@@ -205,14 +206,16 @@ rdd_ids_best = rdd_ids.flatMapValues(get_bestmatches)
 
 #print(rdd_ids_best.collect())
 
+#Write the output to a file
 def get_ouput(record):
-	with open("~/output.tsv","w") as record_file:
+	with open("output.tsv","w") as record_file:
 		record_file.write("Warc key 		 	Entity 				ID\n")
-     	for i in record:
-     		for j in i[1]:
-     			for key in j[1]:
-     				key = key.replace(".*:|\\.(?!m)", "'\'")	
-     				record_file.write(i[0]+"\t\t\t"+j[0]+"\t\t\t"+key+"\n")
+		for i in record:
+			for j in i[1]:
+				for key in j[1]:
+					key = key.replace(".*:|\\.(?!m)", "'\'")
+					record_file.write(i[0]+"\t\t\t"+j[0]+"\t\t\t"+key+"\n")
+
        
 get_ouput(rdd_ids_best.collect())
-print('The output is the file output.tsv in your home directory')
+print('The output is the file output.tsv')
