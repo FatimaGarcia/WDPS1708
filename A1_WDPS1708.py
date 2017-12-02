@@ -63,11 +63,14 @@ def tag_visible(element):
         return False
     return True
 
-def get_text(html):
+def get_text(html, flag):
 	soup = BeautifulSoup(html, "html.parser")  #Extract HTMLContent
-	plain_text = soup.findAll(text=True) #Get plain text
+	if flag == 1:
+		plain_text = soup.findAll("span", {"property" : "dbo:abstract", "xml:lang":"en"})
+	else:
+		plain_text = soup.findAll(text=True) #Get plain text
 	value = filter(tag_visible, plain_text) #Get only visible text
-	#Format the text
+	#Format the text		
 	value = " ".join(value) 
 	value = re.sub(r'[^\x00-\x7F]+',' ', value) #Replace special unicode characters
 	value = re.sub(r'[(?<=\{)(:*?)(?=\})]', ' ', value) #Replace special characters
@@ -87,7 +90,7 @@ def processWarcfile(record):
     #Check if the WARC block contains HTML code
     if key and ('<html' in payload):
         html = payload.split('<html')[1]
-        value = get_text(html)
+        value = get_text(html, 0)
         yield (key, value)
 
 rdd_pairs = rdd.flatMap(processWarcfile) #RDD with tuples (key, text)
@@ -221,7 +224,7 @@ def get_bestmatches(record):
             		link = binding.get('same', {}).get('value', None)
             		if link.startswith('http://dbpedia.org')
 						html = urllib.urlopen(link).read()
-						link_text = get_text(html)
+						link_text = get_text(html, 1)
 						best_matches[key]['text'] = link_text
 		tuples.append([entity, best_matches])
 	yield tuples
