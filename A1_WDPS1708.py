@@ -139,7 +139,7 @@ def get_entities_StanfordNER(record):
 
 rdd_ner_entities = rdd_ner.flatMapValues(get_entities_StanfordNER) #RDD tuples (key, entities)
 
-#print(rdd_ner_entities.collect())
+#print(rdd_ner_entities.collect())  
 
 #Link entities to KB
 ELASTICSEARCH_URL = 'http://10.149.0.127:9200/freebase/label/_search'
@@ -254,14 +254,12 @@ rdd_result = rdd_disambiguation.join(rdd_ids_dis).flatMapValues(cos_similarity)
 
 #Write the output to a file
 def get_output(record):
-	with open("output.tsv","w") as record_file:
-		record_file.write("Warc key 		 	Entity 				ID\n")
-		for i in record:
-			for j in i[1]:
+	for i in record:
+		for j in i[1]:
 				for key in j[1]:
 					key = key.replace(".*:|\\.(?!m)", "'\'")
-					record_file.write(i[0]+"\t\t\t"+j[0]+"\t\t\t"+key+"\n")
+					return (i[0]+"\t\t\t"+j[0]+"\t\t\t"+key+"\n")
 
-       
-get_output(rdd_result.collect())
-print('The output is the file output.tsv')
+result = rdd_result.map(get_output)
+result.saveAsTextFile('output.tsv')       
+print('The output is the file in the directory output.tsv')
