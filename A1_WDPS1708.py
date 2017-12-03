@@ -12,15 +12,14 @@ import re
 import requests
 import json
 import math
+import numpy
 import urllib
 
 from bs4 import BeautifulSoup
 from bs4.element import Comment
 
 import nltk
-from nltk.stem import WordNetLemmatizer
 from nltk.tag import StanfordNERTagger #NER 
-from nltk.tree import Tree
 
 #nltk.download('words')
 #nltk.download('punkt')
@@ -223,11 +222,11 @@ def get_bestmatches(record):
         		response = response.json()
         		for binding in response.get('results', {}).get('bindings', []):
 					link = binding.get('same', {}).get('value', None)
-            		if link.startswith('http://dbpedia.org'):
+					if link.startswith('http://dbpedia.org'):
 						html = urllib.urlopen(link).read()
 						link_text = get_text(html, 1)
 						best_matches[key]['text'] = link_text
-			best_matches = {k: v for k, v in best_matches.items() if v[1] != ''}
+			best_matches = {k: v for k, v in best_matches.iteritems() if v[1] != ''}
 
 		tuples.append([entity, best_matches])
 	yield tuples
