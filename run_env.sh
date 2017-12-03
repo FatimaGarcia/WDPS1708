@@ -22,7 +22,7 @@ pip install requests
 
 zip -r venv.zip venv
 
-PYSPARK_PYTHON=venv/lib/python2.7/sites-packages $SPARK_HOME/bin/spark-submit/bin/spark-submit \
+PYSPARK_PYTHON=venv/lib/python2.7/sites-packages $SPARK_HOME/bin/spark-submit \
 --conf spark.yarn.appMasterEnv.PYSPARK_PYTHON=./VENV/venv/bin/python \
 --master yarn \
 --deploy-mode cluster \
