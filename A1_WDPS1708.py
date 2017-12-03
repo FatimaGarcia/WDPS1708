@@ -226,8 +226,9 @@ def get_bestmatches(record):
 						html = urllib.urlopen(link).read()
 						link_text = get_text(html, 1)
 						best_matches[key]['text'] = link_text
-			best_matches = {k: v for k, v in best_matches.iteritems() if v[1] != ''}
-
+			for key in best_matches:
+				if best_matches[key]['text'] == '':
+					del best_matches[key]
 		tuples.append([entity, best_matches])
 	yield tuples
 
