@@ -26,7 +26,8 @@ from nltk.tree import Tree
 #nltk.download('punkt')
 #nltk.download('averaged_perceptron_tagger')
 
-#from sklearn.feature_extraction.text import TfidfVectorizer
+import scipy
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 
 sc = SparkContext.getOrCreate()
@@ -66,7 +67,7 @@ def tag_visible(element):
 def get_text(html, flag):
 	soup = BeautifulSoup(html, "html.parser")  #Extract HTMLContent
 	if flag == 1:
-		plain_text = soup.find("span", {"property" : "dbo:abstract", "xml:lang":"en"}).getText()
+		value = soup.find("span", {"property" : "dbo:abstract", "xml:lang":"en"}).getText()
 	else:
 		plain_text = soup.findAll(text=True) #Get plain text
 		value = filter(tag_visible, plain_text) #Get only visible text
@@ -95,7 +96,7 @@ def processWarcfile(record):
 
 rdd_pairs = rdd.flatMap(processWarcfile) #RDD with tuples (key, text)
 rdd_disambiguation = rdd_pairs #Save plain text before transform it for disambiguation
-print(rdd_pairs.collect())
+#print(rdd_pairs.collect())
 
 #NLP - NER  
 #1. Tokenization
@@ -139,7 +140,6 @@ def get_entities_StanfordNER(record):
 
 rdd_ner_entities = rdd_ner.flatMapValues(get_entities_StanfordNER) #RDD tuples (key, entities)
 
-print(rdd_ner_entities.join(rdd_disambiguation).collect())
 #print(rdd_ner_entities.collect())
 
 #Link entities to KB
@@ -209,7 +209,7 @@ rdd_ids = rdd_labels.flatMapValues(get_motherKB)
 
 #print(rdd_ids.collect())
 
-#Get 5 best matches from the complete set of results and perform entity disambiguation with the 5 best results
+#Get 10 best matches from the complete set of results and perform entity disambiguation with the 10 best results
 def get_bestmatches(record):
 	best_matches = {}
 	tuples = []
