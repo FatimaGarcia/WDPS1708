@@ -66,15 +66,15 @@ def tag_visible(element):
 def get_text(html, flag):
 	soup = BeautifulSoup(html, "html.parser")  #Extract HTMLContent
 	if flag == 1:
-		plain_text = soup.findAll("span", {"property" : "dbo:abstract", "xml:lang":"en"})
+		plain_text = soup.find("span", {"property" : "dbo:abstract", "xml:lang":"en"}).getText()
 	else:
 		plain_text = soup.findAll(text=True) #Get plain text
-	value = filter(tag_visible, plain_text) #Get only visible text
-	#Format the text		
-	value = " ".join(value) 
-	value = re.sub(r'[^\x00-\x7F]+',' ', value) #Replace special unicode characters
-	value = re.sub(r'[(?<=\{)(:*?)(?=\})]', ' ', value) #Replace special characters
-	value = ' '.join(value.split())
+		value = filter(tag_visible, plain_text) #Get only visible text
+		#Format the text		
+		value = " ".join(value) 
+		value = re.sub(r'[^\x00-\x7F]+',' ', value) #Replace special unicode characters
+		value = re.sub(r'[(?<=\{)(:*?)(?=\})]', ' ', value) #Replace special characters
+		value = ' '.join(value.split())
 
 	return value
 
@@ -139,6 +139,7 @@ def get_entities_StanfordNER(record):
 
 rdd_ner_entities = rdd_ner.flatMapValues(get_entities_StanfordNER) #RDD tuples (key, entities)
 
+print(rdd_ner_entities.join(rdd_disambiguation).collect())
 #print(rdd_ner_entities.collect())
 
 #Link entities to KB
@@ -159,7 +160,7 @@ def get_elasticsearch(record):
 		        score = hit.get('_score', 0)
 
 		        if result.get(freebase_id) == None: #Check duplicate id
-		        	result[freebase_id] = ({'label':label, 'score':score, 'facts': 0 , 'match':0, 'text': ''}) #If freebase_id is not in the dict, add all the extract info from JSON
+		        	result[freebase_id] = ({'label':label, 'score':score, 'facts': 0 , 'match':0, 'text': '', 'similarity': 0}) #If freebase_id is not in the dict, add all the extract info from JSON
 		        else:
 		        	score_1 = max(result[freebase_id]['score'], score)
 		        	result[freebase_id]['score'] = score_1 #If freebase_id is in the dict, update the score but not create a new entry
@@ -208,30 +209,48 @@ rdd_ids = rdd_labels.flatMapValues(get_motherKB)
 
 #print(rdd_ids.collect())
 
-#Get 10 best matches from the complete set of results to perform entity disambiguation with the 10 best results
+#Get 5 best matches from the complete set of results and perform entity disambiguation with the 5 best results
 def get_bestmatches(record):
 	best_matches = {}
 	tuples = []
 	links = []
 	for i in record:
 		entity = i[0]
-		best_matches = dict(sorted(i[1].items(), key=lambda x:(x[1]['match']), reverse=True)[:5])
+		best_matches = dict(sorted(i[1].items(), key=lambda x:(x[1]['match']), reverse=True)[:10])
 		for key in best_matches:
 			response = requests.post(TRIDENT_URL, data={'print': True, 'query': same_as_template % key})
     		if response:
         		response = response.json()
         		for binding in response.get('results', {}).get('bindings', []):
-            		link = binding.get('same', {}).get('value', None)
-            		if link.startswith('http://dbpedia.org')
+					link = binding.get('same', {}).get('value', None)
+            		if link.startswith('http://dbpedia.org'):
 						html = urllib.urlopen(link).read()
 						link_text = get_text(html, 1)
 						best_matches[key]['text'] = link_text
+			best_matches = {k: v for k, v in best_matches.items() if v[1] != ''}
+
 		tuples.append([entity, best_matches])
 	yield tuples
 
-rdd_ids_best = rdd_ids.flatMapValues(get_bestmatches)
+rdd_ids_dis = rdd_ids.flatMapValues(get_bestmatches)
 
 #print(rdd_ids_best.collect())
+
+def cos_similarity(record):
+	tuples = []
+	vect = TfidfVectorizer(min_df=1)
+	for i in record:
+		for key in i[1]:
+			if i[1][key]['text'] != '':
+				text = i[1][key]['text']
+				tfidf = vect.fit_transform([text, i[2]])
+				pairwise_similarity = tfidf * tfidf.T
+				i[1][key]['similarity'] = pairwise_similarity[0,1]
+		result = dict(sorted(i[1].items(), key=lambda x:(x[1]['similarity']), reverse=True)[:1])
+		tuples.append((i[0], result))
+	yield tuples
+
+rdd_result = rdd_disambiguation.join(rdd_ids_dis).flatMapValues(cos_similarity)
 
 #Write the output to a file
 def get_output(record):
@@ -244,5 +263,5 @@ def get_output(record):
 					record_file.write(i[0]+"\t\t\t"+j[0]+"\t\t\t"+key+"\n")
 
        
-get_output(rdd_ids_best.collect())
+get_output(rdd_result.collect())
 print('The output is the file output.tsv')
