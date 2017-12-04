@@ -10,19 +10,12 @@ if [ "$SPARK_HOME" = "" ]; then
 	exit 1
 fi
 # Create virtual environment and install all necessary dependencies
-virtualenv venv -p python2.7
+
 source venv/bin/activate
 virtualenv --relocatable venv
-pip install numpy
-pip install bs4
-pip install nltk
-pip install scipy
-pip install sklearn
-pip install requests
-
 zip -r venv.zip venv
 
-PYSPARK_PYTHON=venv/lib/python2.7/sites-packages $SPARK_HOME/bin/spark-submit \
+PYSPARK_PYTHON=$(readlink -f $(which python)) $SPARK_HOME/bin/spark-submit \
 --conf spark.yarn.appMasterEnv.PYSPARK_PYTHON=./VENV/venv/bin/python \
 --master yarn \
 --deploy-mode cluster \

@@ -126,20 +126,21 @@ rdd_ner = rdd_pairs.flatMapValues(NLP_NER) #RDD tuples (key, tuple(word, label))
 #Extract Name Entities from result - Function to get recognized entities from Stanford NER
 def get_entities_StanfordNER(record):
     entities = []
-    #last_tag = None
+    last_tag = None
     for i in record:
 		if (i[1] !='O' and i[0] not in entities):
-			#if i[1] == last_tag:
-			#	entities[len(entities)-1] = entities[len(entities)-1]+' '+i[0]
-			#else:
-			entities.append(i[0])
-		#last_tag = i[1]
+			if i[1] == last_tag:
+				if i[0] not in entities[len(entities)-1]:
+					entities[len(entities)-1] = entities[len(entities)-1]+' '+i[0]
+			else:
+				entities.append(i[0])
+		last_tag = i[1]
     
     yield entities
 
 rdd_ner_entities = rdd_ner.flatMapValues(get_entities_StanfordNER) #RDD tuples (key, entities)
 
-#print(rdd_ner_entities.collect())  
+print(rdd_ner_entities.collect())  
 
 #Link entities to KB
 ELASTICSEARCH_URL = 'http://10.149.0.127:9200/freebase/label/_search'
@@ -208,14 +209,14 @@ rdd_ids = rdd_labels.flatMapValues(get_motherKB)
 
 #print(rdd_ids.collect())
 
-#Get 10 best matches from the complete set of results and perform entity disambiguation with the 10 best results
+#Get 5 best matches from the complete set of results and perform entity disambiguation with the 5 best results
 def get_bestmatches(record):
 	best_matches = {}
 	tuples = []
 	links = []
 	for i in record:
 		entity = i[0]
-		best_matches = dict(sorted(i[1].items(), key=lambda x:(x[1]['match']), reverse=True)[:10])
+		best_matches = dict(sorted(i[1].items(), key=lambda x:(x[1]['match']), reverse=True)[:5])
 		for key in best_matches:
 			response = requests.post(TRIDENT_URL, data={'print': True, 'query': same_as_template % key})
     		if response:
@@ -226,9 +227,6 @@ def get_bestmatches(record):
 						html = urllib.urlopen(link).read()
 						link_text = get_text(html, 1)
 						best_matches[key]['text'] = link_text
-			for key in best_matches:
-				if best_matches[key]['text'] == '':
-					del best_matches[key]
 		tuples.append([entity, best_matches])
 	yield tuples
 
@@ -236,21 +234,24 @@ rdd_ids_dis = rdd_ids.flatMapValues(get_bestmatches)
 
 #print(rdd_ids_best.collect())
 
+#Choose the best result by calculating cosine similarity between the extracted text and the dbpedia text for the entity
 def cos_similarity(record):
 	tuples = []
 	vect = TfidfVectorizer(min_df=1)
-	for i in record:
+	for i in record[0]:
+		entity = i[0]
 		for key in i[1]:
 			if i[1][key]['text'] != '':
 				text = i[1][key]['text']
-				tfidf = vect.fit_transform([text, i[2]])
+				tfidf = vect.fit_transform([text, record[1]])
 				pairwise_similarity = tfidf * tfidf.T
 				i[1][key]['similarity'] = pairwise_similarity[0,1]
 		result = dict(sorted(i[1].items(), key=lambda x:(x[1]['similarity']), reverse=True)[:1])
-		tuples.append((i[0], result))
+		tuples.append([entity, result])
 	yield tuples
 
-rdd_result = rdd_disambiguation.join(rdd_ids_dis).flatMapValues(cos_similarity)
+rdd_result = rdd_ids_dis.join(rdd_disambiguation)
+rdd_result = rdd_result.flatMapValues(cos_similarity)
 
 #Write the output to a file
 def get_output(record):
