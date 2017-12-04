@@ -131,7 +131,7 @@ def get_entities_StanfordNER(record):
 			entities.append(i[0])
     
     yield entities
-    
+
 #Extract Muliterm Name Entities from result - Function to get recognized entities from Stanford NER
 def get_entities_StanfordNER_multiterm(record):
     entities = []
@@ -149,7 +149,7 @@ def get_entities_StanfordNER_multiterm(record):
 
 rdd_ner_entities = rdd_ner.flatMapValues(get_entities_StanfordNER) #RDD tuples (key, entities)
 
-print(rdd_ner_entities.collect())  
+#print(rdd_ner_entities.collect())  
 
 #Link entities to KB
 ELASTICSEARCH_URL = 'http://10.149.0.127:9200/freebase/label/_search'
