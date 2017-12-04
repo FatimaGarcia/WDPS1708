@@ -223,14 +223,16 @@ def get_bestmatches(record):
 		best_matches = dict(sorted(i[1].items(), key=lambda x:(x[1]['match']), reverse=True)[:5])
 		for key in best_matches:
 			response = requests.post(TRIDENT_URL, data={'print': True, 'query': same_as_template % key})
-    		if response:
-        		response = response.json()
-        		for binding in response.get('results', {}).get('bindings', []):
+			if response:
+				response = response.json()
+				for binding in response.get('results', {}).get('bindings', []):
 					link = binding.get('same', {}).get('value', None)
 					if link.startswith('http://dbpedia.org'):
-						html = urllib.urlopen(link).read()
-						link_text = get_text(html, 1)
-						best_matches[key]['text'] = link_text
+						html = urllib.urlopen(link)
+						if html.getcode() == 200:
+							html = html.read()
+							link_text = get_text(html, 1)
+							best_matches[key]['text'] = link_text
 		tuples.append([entity, best_matches])
 	yield tuples
 
