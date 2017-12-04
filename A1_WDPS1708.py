@@ -255,12 +255,13 @@ rdd_result = rdd_result.flatMapValues(cos_similarity)
 
 #Write the output to a file
 def get_output(record):
+	page =[]
 	for i in record:
 		for j in i[1]:
 				for key in j[1]:
 					key = key.replace(".*:|\\.(?!m)", "'\'")
-					return (i[0]+"\t\t\t"+j[0]+"\t\t\t"+key+"\n")
-
+					page.append(i[0]+"\t\t\t"+j[0]+"\t\t\t"+key+"\n")
+	return page
 result = rdd_result.map(get_output)
 result.saveAsTextFile('output.tsv')       
 print('The output is the file in the directory output.tsv')
