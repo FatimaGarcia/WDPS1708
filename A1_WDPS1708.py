@@ -263,8 +263,9 @@ def get_output(record):
 		for key in i[1]:
 			key = key.split(':')[1]
 			key = key.replace(".", "/")
-			s +=record[0]+"\t\t\t"+i[0]+"\t\t\t"+key+"\n"
+			s +=record[0]+"\t\t\t"+i[0]+"\t\t\t/"+key+"\n"
 	return s
+
 result = rdd_result.map(get_output)
 result.saveAsTextFile('output.tsv')       
 print('The output is the file part-00000 in the directory output.tsv')
