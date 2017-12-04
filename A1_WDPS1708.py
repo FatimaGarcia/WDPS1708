@@ -126,6 +126,15 @@ rdd_ner = rdd_pairs.flatMapValues(NLP_NER) #RDD tuples (key, tuple(word, label))
 #Extract Name Entities from result - Function to get recognized entities from Stanford NER
 def get_entities_StanfordNER(record):
     entities = []
+    for i in record:
+		if (i[1] !='O' and i[0] not in entities):
+			entities.append(i[0])
+    
+    yield entities
+    
+#Extract Muliterm Name Entities from result - Function to get recognized entities from Stanford NER
+def get_entities_StanfordNER_multiterm(record):
+    entities = []
     last_tag = None
     for i in record:
 		if (i[1] !='O' and i[0] not in entities):
@@ -255,14 +264,13 @@ rdd_result = rdd_result.flatMapValues(cos_similarity)
 
 #Write the output to a file
 def get_output(record):
-	page =[]
+	s =''
 	for i in record[1]:
 		for key in i[1]:
 			key = key.split(':')[1]
 			key = key.replace(".", "/")
-			s =record[0]+"\t\t\t"+i[0]+"\t\t\t"+key+"\n"
-			page.append(s)
-	return page
+			s +=record[0]+"\t\t\t"+i[0]+"\t\t\t"+key+"\n"
+	return s
 result = rdd_result.map(get_output)
 result.saveAsTextFile('output.tsv')       
 print('The output is the file in the directory output.tsv')
