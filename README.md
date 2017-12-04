@@ -1,11 +1,11 @@
 # WDPS1708
 Web Data Processing System Assignments - Group 8 - 2017/2018
 
-Fatima Garcia
-Gerasimos M. Giannos
-Vasiliki Kalaitzi
+- Fatima Garcia
+- Gerasimos M. Giannos
+- Vasiliki Kalaitzi
 
-Large Scale Entity Linking
+# Large Scale Entity Linking
 
 #Basic funcionality#
 
