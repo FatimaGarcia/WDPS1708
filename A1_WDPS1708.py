@@ -95,7 +95,6 @@ def processWarcfile(record):
 
 rdd_pairs = rdd.flatMap(processWarcfile) #RDD with tuples (key, text)
 rdd_disambiguation = rdd_pairs #Save plain text before transform it for disambiguation
-#print(rdd_pairs.collect())
 
 #NLP - NER  
 #1. Tokenization
@@ -120,7 +119,6 @@ nlp = StanfordNERTagger(classifier,jar)
 
 rdd_ner = rdd_pairs.flatMapValues(NLP_NER) #RDD tuples (key, tuple(word, label))
 
-#print(rdd_ner.collect())
 
 #Entity extraction
 #Extract Name Entities from result - Function to get recognized entities from Stanford NER
@@ -149,7 +147,6 @@ def get_entities_StanfordNER_multiterm(record):
 
 rdd_ner_entities = rdd_ner.flatMapValues(get_entities_StanfordNER) #RDD tuples (key, entities)
 
-#print(rdd_ner_entities.collect())  
 
 #Link entities to KB
 ELASTICSEARCH_URL = 'http://10.149.0.127:9200/freebase/label/_search'
@@ -178,7 +175,6 @@ def get_elasticsearch(record):
 
 rdd_labels = rdd_ner_entities.flatMapValues(get_elasticsearch) #RDD (key, [entity, dict{freebase_id: {score,  label}}])
 
-#print(rdd_labels.collect())
 
 #Link IDs to motherKB
 TRIDENT_URL = 'http://10.141.0.125:9001/sparql' #May change
@@ -216,7 +212,6 @@ def get_motherKB(record):
 
 rdd_ids = rdd_labels.flatMapValues(get_motherKB)
 
-#print(rdd_ids.collect())
 
 #Get 5 best matches from the complete set of results and perform entity disambiguation with the 5 best results
 def get_bestmatches(record):
@@ -241,7 +236,6 @@ def get_bestmatches(record):
 
 rdd_ids_dis = rdd_ids.flatMapValues(get_bestmatches)
 
-#print(rdd_ids_best.collect())
 
 #Choose the best result by calculating cosine similarity between the extracted text and the dbpedia text for the entity
 def cos_similarity(record):
@@ -273,4 +267,4 @@ def get_output(record):
 	return s
 result = rdd_result.map(get_output)
 result.saveAsTextFile('output.tsv')       
-print('The output is the file in the directory output.tsv')
+print('The output is the file part-00000 in the directory output.tsv')
