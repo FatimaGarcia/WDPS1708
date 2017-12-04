@@ -21,9 +21,9 @@ from bs4.element import Comment
 import nltk
 from nltk.tag import StanfordNERTagger #NER 
 
-#nltk.download('words')
-#nltk.download('punkt')
-#nltk.download('averaged_perceptron_tagger')
+nltk.download('words')
+nltk.download('punkt')
+nltk.download('averaged_perceptron_tagger')
 
 import scipy
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -261,13 +261,14 @@ rdd_result = rdd_result.flatMapValues(cos_similarity)
 #Write the output to a file
 def get_output(record):
 	s =''
-	for i in record[1]:
-		for key in i[1]:
-			key = key.split(':')[1]
-			key = key.replace(".", "/")
-			s +=record[0]+"\t\t\t"+i[0]+"\t\t\t/"+key+"\n"
+	if record[1]:
+		for i in record[1]:
+			for key in i[1]:
+				key = key.split(':')[1]
+				key = key.replace(".", "/")
+				s +=record[0]+"\t\t\t"+i[0]+"\t\t\t/"+key+"\n"
 	return s
 
-result = rdd_result.map(get_output)
+result = rdd_result.coalesce(1).map(get_output)
 result.saveAsTextFile('output.tsv')       
 print('The output is the file part-00000 in the directory output.tsv')

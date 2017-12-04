@@ -35,10 +35,10 @@ Also, APACHE SPARK and files from STANDFOR NER (included in this repository) are
 
 3. Makes sure that .sh has the correct permissions to execute it. 
 
-4. The program takes two arguments : <WARC-KEY> <Input-file> - ./run.sh <WARC-KEY> <Input-file>
+4. The program takes two arguments : WARC-Key - Input-file - ./run.sh WARC-Key  Input-file (The file run.sh runs spark in local mode)
 
 5. The output is a file (part-00000) that is saved in the directory output.tsv in the cluster hdfs. Make sure that this directory does not exist before executing the project.
-This file contains WARC-Key of the WARC file to process, the name of the entities recognized and the corresponding Freebase entity ID.
+This file contains WARC-Key of the entries in the WARC file with HTML content, the name of the recognized entities and the corresponding Freebase entities IDs.
 
 
 #Notes
