@@ -45,8 +45,8 @@ This file contains WARC-Key of the WARC file to process, the name of the entitie
  - The program is running using a TRIDENT server launched in node091. So we are using the following TRIDENT_URL 'http://10.141.0.125:9001/sparql'. This variable is defined in line 184 of A1_WDPS1708.py, in case it has to be changed.
 
  - We include two scripts to run the program:
- 	# run.sh runs it in local mode of Spark
- 	# run_env.sh should run it in Yarn mode. To run this, you should have a virtual environment venv inside the project folder with python dependencies installed
+ 	1 run.sh runs it in local mode of Spark
+ 	2 run_env.sh should run it in Yarn mode. To run this, you should have a virtual environment venv inside the project folder with python dependencies installed
 
 - For extracting name entities we developed two different functions:
 	1. get_entities_StanfordNER - Extract all the entities pointed up by standford NER as single name entities.
