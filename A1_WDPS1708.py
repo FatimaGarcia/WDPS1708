@@ -210,7 +210,10 @@ def get_motherKB(record):
  				response = response.json()
  				n = int(response.get('stats', {}).get('nresults',0))
  				i[1][key]['facts']= n
- 				i[1][key]['match'] = math.log(n) * i[1][key]['score']			    	
+ 				if n != 0:
+	 				i[1][key]['match'] = math.log(n) * i[1][key]['score']
+	 			else: 
+	 				i[1][key]['match'] = 0			    	
 		tuples.append([entity, i[1]])
 	yield tuples
 
