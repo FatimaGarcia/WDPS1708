@@ -22,7 +22,7 @@ This project consists of a python program to perform entity linking by processin
 #Main dependencies#
 
 --- Python packages ---
-The following python packages has to be installed in order to use the program: numpy , scipy, sklearn, bs4, nltk, six, lxml
+The following python packages has to be installed in order to use the program: numpy , scipy, sklearn, bs4, nltk, six, html5lib
 requests
 
 Also, APACHE SPARK and files from STANDFOR NER (included in this repository) are needed. 
