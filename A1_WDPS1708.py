@@ -66,7 +66,11 @@ def tag_visible(element):
 def get_text(html, flag):
 	soup = BeautifulSoup(html, "html5lib")  #Extract HTMLContent
 	if flag == 1:
-		value = soup.find("span", {"property" : "dbo:abstract", "xml:lang":"en"}).getText()
+		value = soup.find("span", {"property" : "dbo:abstract", "xml:lang":"en"})
+		if value is not None:
+			value = value.getText()
+		else:
+			value = ''
 	else:
 		plain_text = soup.findAll(text=True) #Get plain text
 		value = filter(tag_visible, plain_text) #Get only visible text

@@ -12,7 +12,7 @@ Web Data Processing System Assignments - Group 8 - 2017/2018
 This project consists of a python program to perform entity linking by processing WARC files. The main steps that are taken to do so are the following ones:
 1. Extract plain text from the content of the HTML pages in the WARC file. 
 2. Perform NLP and NER to identify the entities in the content
-3. Link the entities to a Freebase database making an ELASTIC SEARCH query.
+3. Link the entities to Freebase entities making an ELASTIC SEARCH query.
 4. By using the IDS retrieved from the ELASTIC SEARCH query, link the entities to the "mother KB"
 5. Filter the 5 best results by 'match' (log(facts)*score) to perform entity disambiguation.
 6. Retrieve the abstract content from dbpedia links of the entities associated with the highest match.
