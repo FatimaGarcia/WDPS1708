@@ -92,21 +92,32 @@ def processWarcfile(record):
 
 rdd_pairs = rdd.flatMap(processWarcfile) 
 
-texts = []
+def get_entities_StanfordNER(record):
+    entities = []
+    for i in record:
+		if (i[1] !='O' and i[0] not in entities):
+			entities.append(i[0])
+    
+    yield entities
 
 def lda(record):
-	tokenizer = RegexpTokenizer(r'\w+')
 	en_stop = get_stop_words('en')
-	p_stemmer = PorterStemmer()
-	raw = record.lower()
-	tokens = tokenizer.tokenize(raw)
-	stopped_tokens = [i for i in tokens if not i in en_stop]
-	stemmed_tokens = [p_stemmer.stem(i) for i in stopped_tokens]
- 	
- 	yield stemmed_tokens
+	tokenized_text = nltk.word_tokenize(record)
+	tokenized_text = [x.encode('utf-8') for x in tokenized_text]
+	tokenized_text = [i for i in tokenized_text if not i in en_stop]
+ 	#StanfordNER
+ 	ner_text_NER = nlp.tag(tokenized_text) #Option 1 - Word tokenization
 
+ 	yield ner_text_NER
+
+classifier = 'stanford-ner/classifiers/english.all.3class.distsim.crf.ser.gz' #Path may change
+jar = 'stanford-ner/stanford-ner.jar'   #Path may change
+nlp = StanfordNERTagger(classifier,jar)
 
 rdd_result = rdd_pairs.flatMap(lda)
+rdd_result = rdd_result.flatMap(get_entities_StanfordNER)
+
+print(rdd_result.collect())
 
 # turn our tokenized documents into a id <-> term dictionary
 dictionary = corpora.Dictionary(i for i in rdd_result.collect())
