@@ -1,10 +1,17 @@
-from pyspark.sql import SparkSession
+import re # needed to remove special character
+from pyspark import Row
+import sys
 from pyspark import SparkContext, SparkConf
-from pyspark.sql.functions import col
-
 import sys
 import collections
 import os
+from pyspark.sql import SparkSession
+from pyspark.ml.feature import StopWordsRemover
+from pyspark.ml.feature import Tokenizer, CountVectorizer
+from pyspark.mllib.clustering import LDA
+from pyspark.sql import functions as F
+from pyspark.sql.types import StructType, StructField, LongType
+
 import re
 import requests
 import json
@@ -16,27 +23,14 @@ from bs4 import BeautifulSoup
 from bs4.element import Comment
 
 import nltk
-from nltk.tokenize import RegexpTokenizer
 from nltk.tag import StanfordNERTagger #NER 
-from nltk.stem.porter import PorterStemmer
-
-#nltk.download('words')
-#nltk.download('punkt')
-#nltk.download('averaged_perceptron_tagger')
-
-import scipy
-from sklearn.feature_extraction.text import TfidfVectorizer
-from gensim import corpora, models
-import gensim
-from stop_words import get_stop_words
-
-
 #Check input parameters
 if len(sys.argv) < 3 or len(sys.argv) >3:
 	print('Usage - <Warc_key> <Input_file>')
 else:
 	record_attribute = sys.argv[1]
 	in_file = sys.argv[2]
+
 
 sc = SparkContext.getOrCreate()
 spark = SparkSession(sc)
@@ -47,12 +41,6 @@ rdd = sc.newAPIHadoopFile(in_file,
     "org.apache.hadoop.io.LongWritable",
     "org.apache.hadoop.io.Text",
     conf={"textinputformat.record.delimiter": "WARC/1.0"})
-
-
-#Process WARC file -- Convert RDD to tuples (key (WARC-Record-ID), value (Text from HTML content))
-#1. Get the key
-#2. Get HTML content to each page (and associated it to the corresponding key)
-#3. Get Text from the HTML content
 
 #Function to get only visible text in HTML - From https://stackoverflow.com/questions/1936466/beautifulsoup-grab-visible-webpage-text
 def tag_visible(element):
@@ -93,48 +81,38 @@ def processWarcfile(record):
         value = get_text(html, 0)
     yield value
 
+rdd_text = rdd.flatMap(processWarcfile) 
 
-def clean_text(record):
-	en_stop = get_stop_words('en')
-	tokenized_text = nltk.word_tokenize(record)
-	tokenized_text = [x.encode('utf-8') for x in tokenized_text]
-	tokenized_text = [i for i in tokenized_text if not i in en_stop]
- 	#StanfordNER
- 	ner_text_NER = nlp.tag(tokenized_text) #Option 1 - Word tokenization
+#print(rdd_text.collect())
+df = rdd_text.map(lambda x: (x, )).toDF(schema=['text'])
 
- 	yield ner_text_NER
+row_with_index = Row(*["id"] + df.columns)
 
-def get_entities_StanfordNER(record):
-    entities = []
-    for i in record:
-		if (i[1] !='O' and i[0] not in entities):
-			entities.append(i[0])
-    
-    yield entities
+def make_row(columns):
+    def _make_row(row, uid):
+        row_dict = row.asDict()
+        return row_with_index(*[uid] + [row_dict.get(c) for c in columns])
 
-classifier = 'stanford-ner/classifiers/english.all.3class.distsim.crf.ser.gz' #Path may change
-jar = 'stanford-ner/stanford-ner.jar'   #Path may change
-nlp = StanfordNERTagger(classifier,jar)
+    return _make_row
 
-rdd_pairs = rdd.flatMap(processWarcfile) 
-rdd_result = rdd_pairs.flatMap(clean_text)
-rdd_result = rdd_result.flatMap(get_entities_StanfordNER)
+f = make_row(df.columns)
 
-#print(rdd_result.collect())
-df = rdd_result.map(lambda x: (x, )).toDF(schema=['text'])
+indexed = (df.rdd
+           .zipWithUniqueId()
+           .map(lambda x: f(*x))
+           .toDF(StructType([StructField("id", LongType(), False)] + df.schema.fields)))
+# tokenize
+tokenizer = Tokenizer(inputCol="text", outputCol="tokens")
+tokenized = tokenizer.transform(indexed)
 
-# turn our tokenized documents into a id <-> term dictionary
-entities = df.select('text').collect()
+# remove stop words
+remover = StopWordsRemover(inputCol="tokens", outputCol="words")
+cleaned = remover.transform(tokenized)
 
-text_list = [j for j in entities]
-text_list = [i.split() for i in text_list]
-print(text_list)
-dictionary = [corpora.Dictionary(text_list)]
-corpus = [dictionary.doc2bow(j) for j in text_list]
-# convert tokenized documents into a document-term matrix
-	 
+# vectorize
+cv = CountVectorizer(inputCol="words", outputCol="vectors")
+count_vectorizer_model = cv.fit(cleaned)
+result = count_vectorizer_model.transform(cleaned)
 
-# generate LDA model
-ldamodel = gensim.models.ldamodel.LdaModel(corpus, num_topics=2, id2word = dictionary, passes=20)
 
-print(ldamodel.print_topics(num_topics=2, num_words=4))
+print(result.show())
