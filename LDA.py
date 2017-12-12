@@ -1,6 +1,5 @@
 from pyspark.sql import SparkSession
 from pyspark import SparkContext, SparkConf
-from pyspark.sql.functions import col
 
 import sys
 import collections
@@ -16,9 +15,12 @@ from bs4 import BeautifulSoup
 from bs4.element import Comment
 
 import nltk
-from nltk.tokenize import RegexpTokenizer
 from nltk.tag import StanfordNERTagger #NER 
 from nltk.stem.porter import PorterStemmer
+from nltk.stem.wordnet import WordNetLemmatizer
+
+import string
+
 
 #nltk.download('words')
 #nltk.download('punkt')
@@ -29,14 +31,16 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from gensim import corpora, models
 import gensim
 from stop_words import get_stop_words
-
+import pyLDAvis.gensim 
 
 #Check input parameters
-if len(sys.argv) < 3 or len(sys.argv) >3:
-	print('Usage - <Warc_key> <Input_file>')
+if len(sys.argv) < 5 or len(sys.argv) >5:
+	print('Usage - <Warc_key> <Input_file> <Mode> <Number of topics>')
 else:
 	record_attribute = sys.argv[1]
 	in_file = sys.argv[2]
+	rec_mode = sys.argv[3]
+	topic_number = sys.argv[4]
 
 sc = SparkContext.getOrCreate()
 spark = SparkSession(sc)
@@ -47,12 +51,6 @@ rdd = sc.newAPIHadoopFile(in_file,
     "org.apache.hadoop.io.LongWritable",
     "org.apache.hadoop.io.Text",
     conf={"textinputformat.record.delimiter": "WARC/1.0"})
-
-
-#Process WARC file -- Convert RDD to tuples (key (WARC-Record-ID), value (Text from HTML content))
-#1. Get the key
-#2. Get HTML content to each page (and associated it to the corresponding key)
-#3. Get Text from the HTML content
 
 #Function to get only visible text in HTML - From https://stackoverflow.com/questions/1936466/beautifulsoup-grab-visible-webpage-text
 def tag_visible(element):
@@ -96,13 +94,18 @@ def processWarcfile(record):
 
 def clean_text(record):
 	en_stop = get_stop_words('en')
+	punctuation = set(string.punctuation) 
+	lemmatize = WordNetLemmatizer()
+
 	tokenized_text = nltk.word_tokenize(record)
 	tokenized_text = [x.encode('utf-8') for x in tokenized_text]
-	tokenized_text = [i for i in tokenized_text if not i in en_stop]
- 	#StanfordNER
- 	ner_text_NER = nlp.tag(tokenized_text) #Option 1 - Word tokenization
+	tokenized_text = [i for i in tokenized_text if i not in en_stop]
+	tokenized_text = [i for i in tokenized_text if i not in punctuation]
+ 	tokenized_text = [lemmatize.lemmatize(i) for i in tokenized_text]
+ 	if rec_mode == 1:
+ 		tokenized_text = nlp.tag(tokenized_text) #Option 1 - Word tokenization
 
- 	yield ner_text_NER
+ 	yield tokenized_text
 
 def get_entities_StanfordNER(record):
     entities = []
@@ -118,12 +121,13 @@ nlp = StanfordNERTagger(classifier,jar)
 
 rdd_pairs = rdd.flatMap(processWarcfile) 
 rdd_result = rdd_pairs.flatMap(clean_text)
-rdd_result = rdd_result.flatMap(get_entities_StanfordNER)
+if rec_mode == 1:
+	rdd_result = rdd_result.flatMap(get_entities_StanfordNER)
 
-#print(rdd_result.collect())
+#Convert RDD to dataframe
 df = rdd_result.map(lambda x: (x, )).toDF(schema=['text'])
 
-# turn our tokenized documents into a id <-> term dictionary
+#LDA
 entities = df.select('text').collect()
 text_list =[]
 for i in entities:
@@ -133,7 +137,9 @@ for i in entities:
 dictionary = corpora.Dictionary(text_list)
 corpus = [dictionary.doc2bow(j) for j in text_list]	 
 
-# generate LDA model
-ldamodel = gensim.models.ldamodel.LdaModel(corpus, num_topics=2, id2word = dictionary, passes=20)
+ldamodel = gensim.models.ldamodel.LdaModel(corpus, num_topics=topic_number, id2word = dictionary, passes=20)
 
-print(ldamodel.print_topics(num_topics=2, num_words=4))
+print(ldamodel.print_topics(num_topics=topic_number, num_words=5))
+
+data = pyLDAvis.gensim.prepare(ldamodel, corpus, dictionary)
+pyLDAvis.save_html(data,'LDA_visualization.html')
