@@ -125,14 +125,13 @@ df = rdd_result.map(lambda x: (x, )).toDF(schema=['text'])
 
 # turn our tokenized documents into a id <-> term dictionary
 entities = df.select('text').collect()
+text_list =[]
+for i in entities:
+	if i[0]:
+		text_list.append(i[0])
 
-text_list = [j for j in entities]
-text_list = [i.split() for i in text_list]
-print(text_list)
-dictionary = [corpora.Dictionary(text_list)]
-corpus = [dictionary.doc2bow(j) for j in text_list]
-# convert tokenized documents into a document-term matrix
-	 
+dictionary = corpora.Dictionary(text_list)
+corpus = [dictionary.doc2bow(j) for j in text_list]	 
 
 # generate LDA model
 ldamodel = gensim.models.ldamodel.LdaModel(corpus, num_topics=2, id2word = dictionary, passes=20)
