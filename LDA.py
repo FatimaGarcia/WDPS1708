@@ -35,12 +35,12 @@ import pyLDAvis.gensim
 
 #Check input parameters
 if len(sys.argv) < 5 or len(sys.argv) >5:
-	print('Usage - <Warc_key> <Input_file> <Mode> <Number of topics>')
+    print('Usage - <Warc_key> <Input_file> <Mode> <Number of topics>')
 else:
-	record_attribute = sys.argv[1]
-	in_file = sys.argv[2]
-	rec_mode = sys.argv[3]
-	topic_number = sys.argv[4]
+    record_attribute = sys.argv[1]
+    in_file = sys.argv[2]
+    rec_mode = sys.argv[3]
+    topic_number = sys.argv[4]
 
 sc = SparkContext.getOrCreate()
 spark = SparkSession(sc)
@@ -62,24 +62,17 @@ def tag_visible(element):
         return False
     return True
 
-def get_text(html, flag):
-	soup = BeautifulSoup(html, "html5lib")  #Extract HTMLContent
-	if flag == 1:
-		value = soup.find("span", {"property" : "dbo:abstract", "xml:lang":"en"})
-		if value is not None:
-			value = value.getText()
-		else:
-			value = ''
-	else:
-		plain_text = soup.findAll(text=True) #Get plain text
-		value = filter(tag_visible, plain_text) #Get only visible text
-		#Format the text	
-		value = " ".join(value) 
-		value = re.sub(r'[^\x00-\x7F]+',' ', value) #Replace special unicode characters
-		value = re.sub(r'[(?<=\{)(:*?)(?=\})]', ' ', value) #Replace special characters
-		value = ' '.join(value.split())
+def get_text(html):
+    soup = BeautifulSoup(html, "html5lib")  #Extract HTMLContent
+    plain_text = soup.findAll(text=True) #Get plain text
+    value = filter(tag_visible, plain_text) #Get only visible text
+    #Format the text
+    value = " ".join(value) 
+    value = re.sub(r'[^\x00-\x7F]+',' ', value) #Replace special unicode characters
+    value = re.sub(r'[(?<=\{)(:*?)(?=\})]', ' ', value) #Replace special characters
+    value = ' '.join(value.split())
 
-	return value
+    return value
 
 #Function to extract the WARC key and plain text from HTML content of the WARC file
 def processWarcfile(record):
@@ -93,25 +86,22 @@ def processWarcfile(record):
 
 
 def clean_text(record):
-	en_stop = get_stop_words('en')
-	punctuation = set(string.punctuation) 
-	lemmatize = WordNetLemmatizer()
+    en_stop = get_stop_words('en')
+    punctuation = set(string.punctuation) 
 
-	tokenized_text = nltk.word_tokenize(record)
-	tokenized_text = [x.encode('utf-8') for x in tokenized_text]
-	tokenized_text = [i for i in tokenized_text if i not in en_stop]
-	tokenized_text = [i for i in tokenized_text if i not in punctuation]
- 	tokenized_text = [lemmatize.lemmatize(i) for i in tokenized_text]
- 	if rec_mode == 1:
- 		tokenized_text = nlp.tag(tokenized_text) #Option 1 - Word tokenization
+    tokenized_text = nltk.word_tokenize(record)
+    tokenized_text = [i for i in tokenized_text if i not in en_stop]
+    tokenized_text = [i for i in tokenized_text if i not in punctuation]
+    if rec_mode == '1':
+        tokenized_text = nlp.tag(tokenized_text) #Option 1 - Word tokenization
 
- 	yield tokenized_text
+    yield tokenized_text
 
 def get_entities_StanfordNER(record):
     entities = []
     for i in record:
-		if (i[1] !='O' and i[0] not in entities):
-			entities.append(i[0])
+        if (i[1] !='O' and i[0] not in entities):
+            entities.append(i[0])
     
     yield entities
 
@@ -122,7 +112,7 @@ nlp = StanfordNERTagger(classifier,jar)
 rdd_pairs = rdd.flatMap(processWarcfile) 
 rdd_result = rdd_pairs.flatMap(clean_text)
 if rec_mode == 1:
-	rdd_result = rdd_result.flatMap(get_entities_StanfordNER)
+    rdd_result = rdd_result.flatMap(get_entities_StanfordNER)
 
 #Convert RDD to dataframe
 df = rdd_result.map(lambda x: (x, )).toDF(schema=['text'])
@@ -131,11 +121,11 @@ df = rdd_result.map(lambda x: (x, )).toDF(schema=['text'])
 entities = df.select('text').collect()
 text_list =[]
 for i in entities:
-	if i[0]:
-		text_list.append(i[0])
+    if i[0]:
+        text_list.append(i[0])
 
 dictionary = corpora.Dictionary(text_list)
-corpus = [dictionary.doc2bow(j) for j in text_list]	 
+corpus = [dictionary.doc2bow(j) for j in text_list] 
 
 ldamodel = gensim.models.ldamodel.LdaModel(corpus, num_topics=topic_number, id2word = dictionary, passes=20)
 

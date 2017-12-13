@@ -30,24 +30,23 @@ import nltk
 from nltk.tag import StanfordNERTagger #NER 
 from nltk.stem.porter import PorterStemmer
 from nltk.stem.wordnet import WordNetLemmatizer
-nltk.download('words')
-nltk.download('punkt')
-nltk.download('averaged_perceptron_tagger')
+#nltk.download('words')
+#nltk.download('punkt')
+#nltk.download('averaged_perceptron_tagger')
 
 #LDA - NMF
 import scipy
-from sklearn.feature_extraction.text import TfidfVectorizer
 from gensim import corpora, models
 import gensim
-import pyLDAvis.gensim 
+import pyLDAvis.gensim
+
 
 #Input parameters
 input_mode = sys.argv[1].upper()
 rec_mode = sys.argv[2]
 topic_number = sys.argv[3]
-topic_mode = sys.argv[4]
 if (input_mode == 'WARC'):
-    in_file = sys.argv[5]
+    in_file = sys.argv[4]
 if (sys.argv[1] == 'help'):
     print('Usage: <Input to process - WARC or ARTICLE> <Topic modelling mode: 1 - Entities, 2-Full text> <Number of topics> <Topic modelling method - 1-LDA, 2-NMF> [If WARC: <Input_file>]')
 
@@ -95,10 +94,10 @@ def NLP(record):
     punctuation = set(string.punctuation) 
 
     tokenized_text = nltk.word_tokenize(record)
-    tokenized_text = [x.encode('utf-8') for x in tokenized_text]
     tokenized_text = [i for i in tokenized_text if i not in en_stop]
+    tokenized_text = [i for i in tokenized_text if i not in punctuation]
 
-    if rec_mode == 1: #If topic modelling with entities
+    if rec_mode == '1': #If topic modelling with entities
         tokenized_text = nlp.tag(tokenized_text) #Option 1 - Word tokenization
 
     yield tokenized_text
@@ -143,7 +142,28 @@ jar = 'stanford-ner/stanford-ner.jar'   #Path may change
 nlp = StanfordNERTagger(classifier,jar)
 
 rdd_result = rdd.flatMap(NLP)
-if rec_mode == 1:
+if rec_mode == '1':
     rdd_result = rdd_result.flatMap(get_entities_StanfordNER)
-    
-print(rdd_result.collect())
+
+#LDA gensim
+#Convert RDD to dataframe
+df = rdd_result.map(lambda x: (x, )).toDF(schema=['text'])
+
+words = df.select('text').collect()
+text_list =[]
+for i in words:
+    if i[0]:
+        text_list.append(i[0])
+
+dictionary = corpora.Dictionary(text_list)
+corpus = [dictionary.doc2bow(j) for j in text_list] 
+
+ldamodel = gensim.models.ldamodel.LdaModel(corpus, num_topics=int(topic_number), id2word = dictionary, passes=20)
+
+print(ldamodel.print_topics(num_topics=int(topic_number), num_words=5))
+
+data = pyLDAvis.gensim.prepare(ldamodel, corpus, dictionary)
+pyLDAvis.save_html(data,'LDA_visualization.html')
+
+
+
