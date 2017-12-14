@@ -65,7 +65,7 @@ Also, topic modelling can be focused only in  recognised named entities or in th
 #Main dependencies#
 Python version required: 3
 --- Python packages ---
-The following python packages has to be installed in order to use the program: numpy ,scipy, bs4, nltk, six, html5lib, newspaper, stop_words, gensim, pyLDAvis, matplotlib
+The following python packages has to be installed in order to use the program: numpy ,scipy, bs4, nltk, six, html5lib, newspaper3k, stop_words, gensim, pyLDAvis, matplotlib
 
 Also, APACHE SPARK and files from STANDFOR NER (included in this repository) are needed. 
 
