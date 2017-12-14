@@ -5,7 +5,7 @@ Web Data Processing System Assignments - Group 8 - 2017/2018
 - Gerasimos M. Giannos
 - Vasiliki Kalaitzi
 
-# Large Scale Entity Linking
+# Large Scale Entity Linking - Assingment 1
 
 #Basic funcionality#
 
@@ -55,3 +55,30 @@ You can choose from using one or other by changing line 150 of the main script (
 
 - As we only managed to run it locally, we are performing the entity disambiguation with 5 results with a highest match (math.log(facts)*score). That is that we are extracting dbpedia text and calculating cosine similarity with only that five results. 
 To improve the recall, you can increase the number of entries process by changing line 228 (best_matches = dict(sorted(i[1].items(), key=lambda x:(x[1]['match']), reverse=True)[:5]))
+
+# Topic Modelling - Assingment 2
+#Basic funcionality
+For this second assignment we develop a python script to identify topics present in a text and to derive hidden patterns in a set of documents or texts. 
+
+This functionality can be performed by processing a WARC file or a set of CNN articles from a specific date.
+Also, topic modelling can be focused only in  recognised named entities or in the whole extracted text.  
+#Main dependencies#
+Python version required: 3
+--- Python packages ---
+The following python packages has to be installed in order to use the program: numpy ,scipy, bs4, nltk, six, html5lib, newspaper, stop_words, gensim, pyLDAvis, matplotlib
+
+Also, APACHE SPARK and files from STANDFOR NER (included in this repository) are needed. 
+
+#How to 
+1. Get the project (git clone https://github.com/FatimaGarcia/WDPS1708).
+
+2. Set SPARK_HOME to your Spark home directory (e.g in the cluster ~/spark-2.1.2-bin-without-hadoop).
+
+3. Makes sure that A2_run.sh has the correct permissions to execute it. 
+
+4. The program takes five arguments : ./A2_run.sh {Mode: WARC (if the input is a WARC file to process) or ARTICLE (if the input to process is a set of articles from CNN)}  {If WARC mode - Input file , If ARTICLE mode - Date of the articles Y/M/D} {Topic modelling mode: 1-Entities, 2 - Full text} {Number of topics} {Output directory}
+
+5. The output is a file LDA_topics.txt that contains the different topics and the ten top words to define them, a HTML file, LDA_visualization.html to visualize the topic and their main associated terms, and a graph Topic_coherence_LDA.png showing the coherence value for each of the topics. 
+The ouput is saved in the directory specified when running the program.
+This file contains WARC-Key of the entries in the WARC file with HTML content, the name of the recognized entities and the corresponding Freebase entities IDs.
+

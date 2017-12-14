@@ -12,10 +12,7 @@ import sys
 import collections
 import os
 import re
-import requests
-import json
 import numpy as np
-import urllib
 import string
 from stop_words import get_stop_words
 #Newspaper articles
@@ -95,11 +92,11 @@ def processWarcfile(record):
 def NLP(record):
     en_stop = get_stop_words('en')
     punctuation = set(string.punctuation) 
-    stemmer = PorterStemmer()
+    #stemmer = PorterStemmer()
     tokenized_text = nltk.word_tokenize(record)
     tokenized_text = [i for i in tokenized_text if i not in en_stop]
     tokenized_text = [i for i in tokenized_text if i not in punctuation]
-    tokenized_text = [stemmer.stem(i) for i in tokenized_text]
+    #tokenized_text = [stemmer.stem(i) for i in tokenized_text]
     if rec_mode == '1': #If topic modelling with entities
         tokenized_text = nlp.tag(tokenized_text) #Option 1 - Word tokenization
 
@@ -167,16 +164,17 @@ ldamodel = gensim.models.ldamodel.LdaModel(corpus, num_topics=int(topic_number),
 #print(ldamodel.print_topics(num_topics=int(topic_number), num_words=5))
 
 #Get and save topics results
+ldatopics = ldamodel.show_topics(formatted=False)
+
 if not os.path.exists(directory):
     os.makedirs(directory)
 
 filepath = os.path.join(directory, 'LDA_topics.txt')
 file = open(filepath, 'w+')
 if input_mode == 'ARTICLE':
-    file.write('Results for CNN articles of : %d' %date)
+    file.write('Results for CNN articles of : %s\n' %date)
 if input_mode == 'WARC':
-    file.write('Results for WARC file : %d' %in_file)
-ldatopics = ldamodel.show_topics(formatted=False)
+    file.write('Results for WARC file : %s\n' %in_file)
 for topicid, topic in ldatopics:
 	top10 = []
 	i = topicid
