@@ -49,7 +49,7 @@ if (input_mode == 'WARC'):
     in_file = sys.argv[2]
 rec_mode = sys.argv[3]
 topic_number = sys.argv[4]
-
+directory = sys.argv[5]
 if (sys.argv[1] == 'help'):
     print('Usage: <Input to process - WARC or ARTICLE> <Topic modelling mode: 1 - Entities, 2-Full text> <Number of topics> <Topic modelling method - 1-LDA, 2-NMF> [If WARC: <Input_file>]')
 
@@ -166,26 +166,35 @@ ldamodel = gensim.models.ldamodel.LdaModel(corpus, num_topics=int(topic_number),
 
 #print(ldamodel.print_topics(num_topics=int(topic_number), num_words=5))
 
-#Get topics results
-file = open('LDA_topics.txt', 'w+') 
+#Get and save topics results
+if not os.path.exists(directory):
+    os.makedirs(directory)
+
+filepath = os.path.join(directory, 'LDA_topics.txt')
+file = open(filepath, 'w+')
+if input_mode == 'ARTICLE':
+    file.write('Results for CNN articles of : %d' %date)
+if input_mode == 'WARC':
+    file.write('Results for WARC file : %d' %in_file)
 ldatopics = ldamodel.show_topics(formatted=False)
 for topicid, topic in ldatopics:
 	top10 = []
 	i = topicid
 	for word, prob in topic:
 		top10.append(word)
-	file.write('Topic%i:%s' %(i,top10))
+	file.write('Topic%i:%s\n' %(i,top10))
 
 #LDA visualization
 data = pyLDAvis.gensim.prepare(ldamodel, corpus, dictionary)
-pyLDAvis.save_html(data,'LDA_visualization.html')
+vispath = os.path.join(directory, 'LDA_visualization.html')
+pyLDAvis.save_html(data, vispath)
 
 #Coherence Analysis
 ldatopics = [[word for word, prob in topic] for topicid, topic in ldatopics]
 lda_coherence = gensim.models.coherencemodel.CoherenceModel(topics=ldatopics, texts=text_list, dictionary=dictionary, window_size=10).get_coherence()
 lda_coherence_topic = gensim.models.coherencemodel.CoherenceModel(topics=ldatopics, texts=text_list, dictionary=dictionary, window_size=10).get_coherence_per_topic()
 
-file.write('LDA Model Coherence: %s' %lda_coherence)
+file.write('LDA Model Coherence: %s\n' %lda_coherence)
 file.close()
 #Generate plot with topic coherences
 #Topic index
@@ -201,9 +210,12 @@ x = np.arange(n)
 plt.bar(x, lda_coherence_topic, width=0.2, tick_label=index, align='center')
 plt.xlabel('Topics')
 plt.ylabel('Coherence Value')
-plt.savefig('Coherence_lda', dpi=None, facecolor='w', edgecolor='w',
+figpath = os.path.join(directory, 'Topic_coherence_LDA')
+
+plt.savefig(figpath, dpi=None, facecolor='w', edgecolor='w',
             orientation='portrait', papertype=None, format=None,
             transparent=False, bbox_inches=None, pad_inches=0.1,
             frameon=None)
-print('The results are in your home directory in the folder LDA-8')
+
+print('The results are in the specified directory')
 
