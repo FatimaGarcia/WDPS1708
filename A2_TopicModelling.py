@@ -14,7 +14,7 @@ import os
 import re
 import requests
 import json
-import numpy
+import numpy as np
 import urllib
 import string
 from stop_words import get_stop_words
@@ -28,8 +28,7 @@ from bs4.element import Comment
 #NLTK
 import nltk
 from nltk.tag import StanfordNERTagger #NER 
-from nltk.stem.porter import PorterStemmer
-from nltk.stem.wordnet import WordNetLemmatizer
+from nltk.stem.porter import *
 #nltk.download('words')
 #nltk.download('punkt')
 #nltk.download('averaged_perceptron_tagger')
@@ -40,13 +39,17 @@ from gensim import corpora, models
 import gensim
 import pyLDAvis.gensim
 
+import matplotlib.pyplot as plt
 
 #Input parameters
 input_mode = sys.argv[1].upper()
-rec_mode = sys.argv[2]
-topic_number = sys.argv[3]
+if (input_mode == 'ARTICLE'):
+	date = sys.argv[2]
 if (input_mode == 'WARC'):
-    in_file = sys.argv[4]
+    in_file = sys.argv[2]
+rec_mode = sys.argv[3]
+topic_number = sys.argv[4]
+
 if (sys.argv[1] == 'help'):
     print('Usage: <Input to process - WARC or ARTICLE> <Topic modelling mode: 1 - Entities, 2-Full text> <Number of topics> <Topic modelling method - 1-LDA, 2-NMF> [If WARC: <Input_file>]')
 
@@ -92,11 +95,11 @@ def processWarcfile(record):
 def NLP(record):
     en_stop = get_stop_words('en')
     punctuation = set(string.punctuation) 
-
+    stemmer = PorterStemmer()
     tokenized_text = nltk.word_tokenize(record)
     tokenized_text = [i for i in tokenized_text if i not in en_stop]
     tokenized_text = [i for i in tokenized_text if i not in punctuation]
-
+    tokenized_text = [stemmer.stem(i) for i in tokenized_text]
     if rec_mode == '1': #If topic modelling with entities
         tokenized_text = nlp.tag(tokenized_text) #Option 1 - Word tokenization
 
@@ -113,12 +116,13 @@ def get_entities_StanfordNER(record):
 
 #Option 1 - Topic modelling from CNN articles 
 if input_mode == 'ARTICLE':
-    actual_date = time.strftime("%Y/%m/%d")
+    if not date:
+        date = time.strftime("%Y/%m/%d")
     #Get CNN articles
     date_articles = []
     cnn_paper = newspaper.build('http://cnn.com', memoize_articles=False)
     for article in cnn_paper.articles:
-        if str(actual_date) in article.url:
+        if str(date) in article.url:
             article = Article(article.url, keep_article_html=True)
             article.download()
             article.parse()
@@ -145,7 +149,7 @@ rdd_result = rdd.flatMap(NLP)
 if rec_mode == '1':
     rdd_result = rdd_result.flatMap(get_entities_StanfordNER)
 
-#LDA gensim
+#LDA - Gensim
 #Convert RDD to dataframe
 df = rdd_result.map(lambda x: (x, )).toDF(schema=['text'])
 
@@ -160,10 +164,46 @@ corpus = [dictionary.doc2bow(j) for j in text_list]
 
 ldamodel = gensim.models.ldamodel.LdaModel(corpus, num_topics=int(topic_number), id2word = dictionary, passes=20)
 
-print(ldamodel.print_topics(num_topics=int(topic_number), num_words=5))
+#print(ldamodel.print_topics(num_topics=int(topic_number), num_words=5))
 
+#Get topics results
+file = open('LDA_topics.txt', 'w+') 
+ldatopics = ldamodel.show_topics(formatted=False)
+for topicid, topic in ldatopics:
+	top10 = []
+	i = topicid
+	for word, prob in topic:
+		top10.append(word)
+	file.write('Topic%i:%s' %(i,top10))
+
+#LDA visualization
 data = pyLDAvis.gensim.prepare(ldamodel, corpus, dictionary)
 pyLDAvis.save_html(data,'LDA_visualization.html')
 
+#Coherence Analysis
+ldatopics = [[word for word, prob in topic] for topicid, topic in ldatopics]
+lda_coherence = gensim.models.coherencemodel.CoherenceModel(topics=ldatopics, texts=text_list, dictionary=dictionary, window_size=10).get_coherence()
+lda_coherence_topic = gensim.models.coherencemodel.CoherenceModel(topics=ldatopics, texts=text_list, dictionary=dictionary, window_size=10).get_coherence_per_topic()
 
+file.write('LDA Model Coherence: %s' %lda_coherence)
+file.close()
+#Generate plot with topic coherences
+#Topic index
+index = []
+for j in range(0, int(topic_number)):
+    formatting_template = 'Topic%s'
+    i = formatting_template % j
+    index.append(i)
+
+assert len(lda_coherence_topic) == len(index)
+n = len(lda_coherence_topic)
+x = np.arange(n)
+plt.bar(x, lda_coherence_topic, width=0.2, tick_label=index, align='center')
+plt.xlabel('Topics')
+plt.ylabel('Coherence Value')
+plt.savefig('Coherence_lda', dpi=None, facecolor='w', edgecolor='w',
+            orientation='portrait', papertype=None, format=None,
+            transparent=False, bbox_inches=None, pad_inches=0.1,
+            frameon=None)
+print('The results are in your home directory in the folder LDA-8')
 
