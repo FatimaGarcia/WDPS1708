@@ -14,6 +14,7 @@ import os
 import re
 import numpy as np
 import string
+import json
 from stop_words import get_stop_words
 #Newspaper articles
 import newspaper
