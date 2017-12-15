@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+if [ $1 == "help" ]; then
+	echo $0: Usage: \<Mode - WARC or ARTICLE\> \<If ARTICLE - News Date Y/M/D, If WARC - Input-File-Path\> \<1 Entities - 2 Full text\> \<Number of topics\> \<Output directory\>
+	exit 1
+fi
 
 if [ $# -ne 5 ]; then
 	echo $0: Usage: \<Mode - WARC or ARTICLE\> \<If ARTICLE - News Date Y/M/D, If WARC - Input-File-Path\> \<1 Entities - 2 Full text\> \<Number of topics\> \<Output directory\>

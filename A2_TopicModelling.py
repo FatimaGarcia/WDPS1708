@@ -40,6 +40,8 @@ import pyLDAvis.gensim
 import matplotlib.pyplot as plt
 
 #Input parameters
+if (sys.argv[1] == 'help'):
+    print('Usage: <Input mode - WARC or ARTICLE> <If WARC: Paht to input file / If ARTICLE: Articles date y/m/d> <1 - Entities, 2-Full text> <Number of topics> <Output directory>')
 input_mode = sys.argv[1].upper()
 if (input_mode == 'ARTICLE'):
 	date = sys.argv[2]
@@ -48,8 +50,6 @@ if (input_mode == 'WARC'):
 rec_mode = sys.argv[3]
 topic_number = sys.argv[4]
 directory = sys.argv[5]
-if (sys.argv[1] == 'help'):
-    print('Usage: <Input to process - WARC or ARTICLE> <Topic modelling mode: 1 - Entities, 2-Full text> <Number of topics> <Topic modelling method - 1-LDA, 2-NMF> [If WARC: <Input_file>]')
 
 #Spark config and session
 sc = SparkContext.getOrCreate()
@@ -59,7 +59,7 @@ spark = SparkSession(sc)
 #Function to get only visible text in HTML - From https://stackoverflow.com/questions/1936466/beautifulsoup-grab-visible-webpage-text
 def tag_visible(element):
     #Filter elements with following tags
-    if element.parent.name in ['style', 'script', 'head', 'title', 'meta', '[document]']:
+    if element.parent.name in ['style', 'script', 'head', 'title', 'meta', '[document]', 'footer']:
         return False
     #Filter comments
     if isinstance(element, Comment):
@@ -159,7 +159,6 @@ for i in words:
 
 dictionary = corpora.Dictionary(text_list)
 corpus = [dictionary.doc2bow(j) for j in text_list] 
-
 ldamodel = gensim.models.ldamodel.LdaModel(corpus, num_topics=int(topic_number), id2word = dictionary, passes=20)
 
 #print(ldamodel.print_topics(num_topics=int(topic_number), num_words=5))
